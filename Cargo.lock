@@ -3081,6 +3081,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tidvar-payer"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "rand_core 0.6.4",
+ "reddsa 0.5.2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "tidvar-chain",
+ "tidvar-core",
+ "tidvar-seal",
+ "wasm-bindgen",
+ "zcash_protocol",
+ "zeroize",
+]
+
+[[package]]
 name = "tidvar-seal"
 version = "0.1.0"
 dependencies = [

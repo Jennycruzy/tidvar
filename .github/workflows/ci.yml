@@ -12,6 +12,13 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo check --workspace --target wasm32-unknown-unknown --locked
+      - run: cargo clippy -p tidvar-payer --target wasm32-unknown-unknown --locked -- -D warnings
+      - shell: python
+        run: |
+          import subprocess, json
+          metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version=1"]))
+          versions = {p["version"] for p in metadata["packages"] if p["name"] == "zcash_note_encryption"}
+          assert versions == {"0.5.1"}, versions
   layout:
     runs-on: ubuntu-latest
     steps:
@@ -46,3 +53,13 @@ jobs:
                       for name, options in section.get(kind, {}).items():
                           package = options.get("package", name) if isinstance(options, dict) else name
                           assert package in allowed or package.startswith("tidvar-") or package.startswith("netlink-"), (str(path), package)
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix packages/tidvar-web --ignore-scripts
+      - run: npm run check --prefix packages/tidvar-web

@@ -1,0 +1,14 @@
+{
+  "name": "@tidvar/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsc",
+    "build:wasm": "cargo build --manifest-path ../../Cargo.toml -p tidvar-payer --target wasm32-unknown-unknown --release && wasm-bindgen ../../target/wasm32-unknown-unknown/release/tidvar_payer.wasm --out-dir pkg --target web"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

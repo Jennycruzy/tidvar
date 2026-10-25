@@ -9,3 +9,5 @@
 *.sqlite-wal
 *.key
 *.age
+
+/packages/*/dist/

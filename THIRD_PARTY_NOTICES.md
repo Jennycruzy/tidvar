@@ -28,3 +28,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## English backup words
+
+The encoded English word list in `crates/tidvar-payer/src/english.hex` is the
+BIP-39 English word list from the Bitcoin BIPs repository:
+https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
+
+The decoded UTF-8 file has SHA-256
+`2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`.
+BIP-39 is MIT-licensed and authored by Marek Palatinus, Pavol Rusnak,
+Aaron Voisine and Sean Bowe. Tidvar implements the 256-bit entropy and checksum
+encoding itself; the backup root is derived by Tidvar's own domain-separated
+hash, rather than BIP-39's password-based wallet seed derivation.

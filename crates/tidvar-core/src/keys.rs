@@ -252,6 +252,85 @@ impl SecondRound {
 }
 
 impl Keys {
+    pub fn restore(
+        role: Role,
+        secret: &[u8],
+        public: &[u8],
+        viewing_key: &[u8],
+        network: NetworkType,
+    ) -> Result<Self, KeyError> {
+        if secret.len() > encoding::MAX_MESSAGE_BYTES || public.len() > encoding::MAX_MESSAGE_BYTES
+        {
+            return Err(KeyError::Message);
+        }
+        let package =
+            frost::keys::KeyPackage::deserialize(secret).map_err(|_| KeyError::Message)?;
+        let public_package =
+            frost::keys::PublicKeyPackage::deserialize(public).map_err(|_| KeyError::Message)?;
+        let derived = frost::keys::VerifyingShare::from(*package.signing_share());
+        if package.identifier() != &role.identifier()?
+            || *package.min_signers() != 2
+            || public_package.min_signers() != Some(2)
+            || public_package.verifying_shares().len() != 2
+            || derived != *package.verifying_share()
+            || public_package.verifying_shares().get(&role.identifier()?) != Some(&derived)
+            || public_package.verifying_key() != package.verifying_key()
+            || !package.has_even_y()
+            || !public_package.has_even_y()
+        {
+            return Err(KeyError::Group);
+        }
+        let group = bytes32(
+            public_package
+                .verifying_key()
+                .serialize()
+                .map_err(|_| KeyError::Group)?,
+        )?;
+        let share = |role: Role| -> Result<[u8; 32], KeyError> {
+            bytes32(
+                public_package
+                    .verifying_shares()
+                    .get(&role.identifier()?)
+                    .ok_or(KeyError::Group)?
+                    .serialize()
+                    .map_err(|_| KeyError::Group)?,
+            )
+        };
+        let payer = share(Role::Payer)?;
+        let service = share(Role::Service)?;
+        if point(&group)?
+            != point(&payer)? * pasta_curves::pallas::Scalar::from(2) - point(&service)?
+        {
+            return Err(KeyError::Group);
+        }
+        let viewing: [u8; 96] = viewing_key.try_into().map_err(|_| KeyError::Group)?;
+        if viewing[..32] != group {
+            return Err(KeyError::Group);
+        }
+        let fvk = orchard::keys::FullViewingKey::from_bytes(&viewing).ok_or(KeyError::Group)?;
+        let receiver = fvk
+            .address_at(0u32, orchard::keys::Scope::External)
+            .to_raw_address_bytes();
+        let address = unified::Address::try_from_items(
+            unified::Revision::R0,
+            vec![unified::Uitem::Data(unified::Receiver::Orchard(receiver))],
+        )
+        .map_err(|_| KeyError::Group)?
+        .encode(&network);
+        Ok(Self {
+            role,
+            public: PublicKeys {
+                group,
+                payer,
+                service,
+                viewing_key: viewing.to_vec(),
+                address,
+            },
+            package,
+            public_package,
+        })
+    }
+
     pub fn service_share(&self) -> Result<Zeroizing<[u8; 32]>, KeyError> {
         if self.role != Role::Service {
             return Err(KeyError::Group);
@@ -292,6 +371,47 @@ mod tests {
         assert_eq!(p.public.address, s.public.address);
         assert!(p.public.address.starts_with("utest1"));
         assert_ne!(*p.secret_bytes()?, *s.secret_bytes()?);
+        let restored = Keys::restore(
+            Role::Payer,
+            &p.secret_bytes()?,
+            &p.public_bytes()?,
+            &p.public.viewing_key,
+            NetworkType::Test,
+        )?;
+        assert_eq!(restored.public.address, p.public.address);
+        assert_eq!(*restored.secret_bytes()?, *p.secret_bytes()?);
+        assert!(
+            Keys::restore(
+                Role::Service,
+                &p.secret_bytes()?,
+                &p.public_bytes()?,
+                &p.public.viewing_key,
+                NetworkType::Test
+            )
+            .is_err()
+        );
+        assert!(
+            Keys::restore(
+                Role::Payer,
+                &s.secret_bytes()?,
+                &p.public_bytes()?,
+                &p.public.viewing_key,
+                NetworkType::Test
+            )
+            .is_err()
+        );
+        let mut changed_viewing = p.public.viewing_key.clone();
+        changed_viewing[0] ^= 1;
+        assert!(
+            Keys::restore(
+                Role::Payer,
+                &p.secret_bytes()?,
+                &p.public_bytes()?,
+                &changed_viewing,
+                NetworkType::Test
+            )
+            .is_err()
+        );
         let (_, _, ua) =
             unified::Address::decode(&p.public.address).map_err(|_| KeyError::Group)?;
         assert_eq!(ua.items().len(), 1);
