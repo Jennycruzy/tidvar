@@ -1,0 +1,16 @@
+{
+  "retrieved_utc": "2026-10-25T15:07:35.037685+00:00",
+  "chain": "quicknet",
+  "server": "https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+  "requests": [
+    "/info",
+    "/public/latest",
+    "/public/33379161"
+  ],
+  "beacon_round": 33379162,
+  "sha256": {
+    "info.json": "3e690bc527c8a4e78232bc06b5a3cff057c51c68f51b208a1a21b2abd6d6b194",
+    "beacon.json": "7029657ad71cf27d79efc8c45cb64098cd61ae8079f2d9147fb5f113ffecefc2",
+    "previous.json": "d452e4efc2eac6ee6402ebde76bcca93bb560cfaa1b292594b346b641392a1a3"
+  }
+}

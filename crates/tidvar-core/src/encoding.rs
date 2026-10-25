@@ -71,3 +71,15 @@ pub mod fixed32 {
             .map_err(|_| serde::de::Error::custom("Expected 32 bytes."))
     }
 }
+
+pub mod fixed16 {
+    use super::*;
+    pub fn serialize<S: Serializer>(value: &[u8; 16], s: S) -> Result<S::Ok, S::Error> {
+        bytes::serialize(value, s)
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 16], D::Error> {
+        bytes::deserialize(d)?
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("Expected 16 bytes."))
+    }
+}

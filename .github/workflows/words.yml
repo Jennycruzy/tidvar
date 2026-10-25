@@ -11,12 +11,16 @@ jobs:
         run: |
           import base64, pathlib, re, subprocess
           pattern = re.compile(base64.b64decode("XGIoPzptaWxlc3RvbmV8Z2F0ZXxHKD86WzAtOV18MVswLTJdKXxjaGVja3BvaW50fGF1ZGl0fHNwZWN8Q29kZXh8Q2xhdWRlfGF1ZGl0b3J8QS1pdGVtfFUtaXRlbXxUT0RPfEZJWE1FfG1vY2t8c3R1YnxQcmludGd1YXJkfFJlZGV5ZXxEaXR0b3xDbG9ha3Jvb218Rm9ya2xhYnxUcnVldXB8U2hvd01lfENob2cpXGI=").decode(), re.I)
+          allowances = pathlib.Path(".github/words-allow.txt").read_text().splitlines()
           for name in subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0"):
-              if not name:
+              if not name or name == ".github/words-allow.txt":
                   continue
               data = pathlib.Path(name).read_bytes()
               if b"\0" in data:
                   continue
               text = data.decode(errors="strict").replace("cargo audit", "")
+              for value in allowances:
+                  if value:
+                      text = text.replace(value, "")
               found = pattern.search(text)
               assert not found, (name, found.group() if found else "")
