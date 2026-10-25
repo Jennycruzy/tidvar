@@ -1,0 +1,48 @@
+name: Rust
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy --target wasm32-unknown-unknown
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo check --workspace --target wasm32-unknown-unknown --locked
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: python
+        run: |
+          import subprocess
+          roots = set("crates services web packages watch measure evidence docs deploy .github".split())
+          files = set("README.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md CONTRIBUTING.md SECURITY.md THIRD_PARTY_NOTICES.md BUILDLOG.md Cargo.toml Cargo.lock rust-toolchain.toml deny.toml .gitignore".split())
+          crates = set("tidvar-core tidvar-seal tidvar-chain tidvar-payer tidvar-payee tidvar-402 tidvar-cli tidvar-agent".split())
+          for path in subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0"):
+              if not path:
+                  continue
+              parts = path.split("/")
+              assert path in files or (len(parts) > 1 and parts[0] in roots), path
+              if parts[0] == "crates":
+                  assert len(parts) > 2 and parts[1] in crates, path
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: python
+        run: |
+          import pathlib, tomllib
+          allowed = set("pczt zcash_primitives zcash_protocol zcash_keys zcash_address zcash_client_backend orchard zcash_note_encryption incrementalmerkletree shardtree zip32 zip321 reddsa frost-core frost-rerandomized pasta_curves group ff blake2b_simd chacha20 rand_core rand_chacha getrandom tlock drand_core ark-bls12-381 ark-ec ark-ff ark-serialize sha2 age zeroize tokio axum tower tonic tonic-web-wasm-client prost reqwest serde serde_json base64 hex thiserror anyhow tracing clap wasm-bindgen js-sys web-sys rusqlite wireguard-control proptest libfuzzer-sys insta".split())
+          for path in [pathlib.Path("Cargo.toml"), *pathlib.Path("crates").glob("*/Cargo.toml"), *pathlib.Path("services").glob("*/Cargo.toml")]:
+              value = tomllib.loads(path.read_text())
+              sections = [value, value.get("workspace", {})]
+              sections.extend(value.get("target", {}).values())
+              for section in sections:
+                  for kind in ("dependencies", "dev-dependencies", "build-dependencies"):
+                      for name, options in section.get(kind, {}).items():
+                          package = options.get("package", name) if isinstance(options, dict) else name
+                          assert package in allowed or package.startswith("tidvar-") or package.startswith("netlink-"), (str(path), package)

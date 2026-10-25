@@ -1,0 +1,11 @@
+/target/
+/web/node_modules/
+/web/dist/
+/packages/*/node_modules/
+/packages/*/pkg/
+.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.key
+*.age
