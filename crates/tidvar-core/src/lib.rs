@@ -6,3 +6,5 @@ pub mod encoding;
 pub mod keys;
 
 pub mod record;
+
+pub mod frost;

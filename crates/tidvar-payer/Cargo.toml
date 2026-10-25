@@ -22,6 +22,8 @@ reddsa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zcash_protocol.workspace = true
+zcash_address.workspace = true
+zip321.workspace = true
 
 [lints]
 workspace = true

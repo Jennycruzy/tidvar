@@ -158,6 +158,12 @@ impl BrowserPayer {
         };
         json(payer.record().ok_or_else(wrong_state)?)
     }
+    pub fn funding_request(&self) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        json(&payer.funding_request().map_err(error)?)
+    }
     pub fn backup_plaintext(&self) -> Result<Vec<u8>, JsValue> {
         let State::Ready(payer) = &self.state else {
             return Err(wrong_state());

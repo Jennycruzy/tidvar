@@ -32,6 +32,14 @@ pub enum PayerError {
     Chain(#[from] tidvar_chain::ChainError),
 }
 
+#[derive(Serialize)]
+pub struct FundingRequest {
+    pub address: String,
+    pub amount_zat: u64,
+    pub amount: String,
+    pub uri: String,
+}
+
 pub struct Setup {
     inner: FirstRound,
 }
@@ -136,6 +144,35 @@ impl PendingPayer {
     }
 }
 impl Payer {
+    pub fn funding_request(&self) -> Result<FundingRequest, PayerError> {
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        record.verify()?;
+        let address = self.keys.public.address.clone();
+        let recipient = zcash_address::ZcashAddress::try_from_encoded(&address)
+            .map_err(|_| PayerError::Backup)?;
+        let amount_zat = record.body.terms.funded.value();
+        let amount = zcash_protocol::value::Zatoshis::from_u64(amount_zat)
+            .map_err(|_| PayerError::Backup)?;
+        let uri =
+            zip321::TransactionRequest::new(vec![zip321::Payment::without_memo(recipient, amount)])
+                .map_err(|_| PayerError::Backup)?
+                .to_uri();
+        let decimal = format!(
+            "{}.{:08}",
+            amount_zat / 100_000_000,
+            amount_zat % 100_000_000
+        );
+        let amount = decimal
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_owned();
+        Ok(FundingRequest {
+            address,
+            amount_zat,
+            amount,
+            uri,
+        })
+    }
     pub fn record(&self) -> Option<&tidvar_core::record::SignedRecord> {
         self.record.as_ref()
     }

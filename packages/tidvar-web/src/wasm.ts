@@ -9,6 +9,7 @@ export interface Payer {
   record_body(offer: string, terms: string): string;
   approve_record(offer: string, terms: string, partial: string): string;
   signed_record(): string;
+  funding_request(): string;
   backup_plaintext(): Uint8Array;
   start_sync(reply: Uint8Array): void;
   apply_blocks(reply: Uint8Array): void;

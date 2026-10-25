@@ -59,6 +59,21 @@ fn separate_service_saves_only_its_own_share_after_both_signatures()
     let partial = s.sign(body, &key, &mut OsRng)?;
     let signed = p.approve_record(&root, offer, terms, partial, &mut OsRng)?;
     let accepted = s.accept(signed)?;
+    let request = p.funding_request()?;
+    assert_eq!(request.amount, "0.001");
+    let decoded = zip321::TransactionRequest::from_uri(&request.uri)?;
+    assert_eq!(decoded.payments().len(), 1);
+    let payment = decoded
+        .payments()
+        .values()
+        .next()
+        .ok_or("No payment request")?;
+    assert_eq!(
+        payment.amount().ok_or("No amount")?.into_u64(),
+        request.amount_zat
+    );
+    assert_eq!(payment.recipient_address().to_string(), request.address);
+    assert!(payment.memo().is_none());
     let mut bytes = [0; 16];
     OsRng.fill_bytes(&mut bytes);
     let path = std::env::temp_dir().join(format!("tidvar-{}.sqlite", hex::encode(bytes)));
