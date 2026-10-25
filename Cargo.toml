@@ -12,6 +12,18 @@ repository = "https://github.com/Jennycruzy/tidvar"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+base64 = "=0.23.1"
+blake2b_simd = "1"
+reddsa = { version = "=0.5.2", features = ["frost"] }
+rand_core = "0.6"
+zeroize = "1"
+pasta_curves = "0.6"
+group = "0.14"
+ff = "0.14"
+orchard = { version = "=0.16.0", default-features = false }
+zcash_keys = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a", default-features = false, features = ["orchard"] }
+zcash_address = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a" }
+zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
