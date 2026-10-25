@@ -121,6 +121,43 @@ impl BrowserPayer {
         self.state = State::Ready(Box::new(payer));
         Ok(public)
     }
+    pub fn record_body(&self, offer: &str, terms: &str) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .record_body(&self.root, parse(offer)?, parse(terms)?)
+                .map_err(error)?,
+        )
+    }
+    pub fn approve_record(
+        &mut self,
+        offer: &str,
+        terms: &str,
+        partial: &str,
+    ) -> Result<String, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .approve_record(
+                    &self.root,
+                    parse(offer)?,
+                    parse(terms)?,
+                    parse(partial)?,
+                    &mut OsRng,
+                )
+                .map_err(error)?,
+        )
+    }
+    pub fn signed_record(&self) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        json(payer.record().ok_or_else(wrong_state)?)
+    }
     pub fn backup_plaintext(&self) -> Result<Vec<u8>, JsValue> {
         let State::Ready(payer) = &self.state else {
             return Err(wrong_state());

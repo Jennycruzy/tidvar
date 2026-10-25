@@ -21,6 +21,8 @@ pub enum PayerError {
     #[error("This payment commitment has already been used.")]
     ReusedCommitment,
     #[error(transparent)]
+    Record(#[from] tidvar_core::record::RecordError),
+    #[error(transparent)]
     Keys(#[from] KeyError),
     #[error(transparent)]
     Seal(#[from] SealError),
@@ -49,6 +51,7 @@ pub struct Payer {
     seal: VerifiedSeal,
     sync: Option<SyncState>,
     consumed: Vec<[u8; 32]>,
+    record: Option<tidvar_core::record::SignedRecord>,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -69,6 +72,7 @@ struct Backup {
     openings: SavedOpenings,
     sync: Option<Snapshot>,
     consumed: Vec<[u8; 32]>,
+    record: Option<tidvar_core::record::SignedRecord>,
     #[serde(with = "tidvar_core::encoding::fixed32")]
     owner: [u8; 32],
 }
@@ -127,10 +131,59 @@ impl PendingPayer {
             seal,
             sync: None,
             consumed: Vec::new(),
+            record: None,
         })
     }
 }
 impl Payer {
+    pub fn record(&self) -> Option<&tidvar_core::record::SignedRecord> {
+        self.record.as_ref()
+    }
+    pub fn record_body(
+        &self,
+        root: &Root,
+        offer: tidvar_core::record::Offer,
+        terms: tidvar_core::record::Terms,
+    ) -> Result<tidvar_core::record::RecordBody, PayerError> {
+        let commitment = self.seal.sealed().commitment()?;
+        let id = tidvar_core::record::tab_id(&self.keys.public, &offer, &terms, &commitment)?;
+        let public = reddsa::VerificationKey::from(&root.signing_key(&id)?).into();
+        let body = tidvar_core::record::RecordBody::new(
+            offer,
+            terms,
+            &self.keys.public,
+            commitment,
+            self.seal.challenge().indices.clone(),
+            public,
+        )?;
+        if body.refund_round != self.seal.sealed().round {
+            return Err(PayerError::Backup);
+        }
+        Ok(body)
+    }
+    pub fn approve_record<R: RngCore + CryptoRng>(
+        &mut self,
+        root: &Root,
+        offer: tidvar_core::record::Offer,
+        terms: tidvar_core::record::Terms,
+        partial: tidvar_core::record::ServiceSigned,
+        rng: &mut R,
+    ) -> Result<tidvar_core::record::SignedRecord, PayerError> {
+        partial.verify()?;
+        let expected = self.record_body(root, offer, terms)?;
+        if expected.canonical()? != partial.body.canonical()? {
+            return Err(PayerError::Backup);
+        }
+        if let Some(record) = &self.record {
+            if record.body.canonical()? != expected.canonical()? {
+                return Err(PayerError::Backup);
+            }
+            return Ok(record.clone());
+        }
+        let record = partial.countersign(&root.signing_key(&expected.tab_id)?, rng)?;
+        self.record = Some(record.clone());
+        Ok(record)
+    }
     pub fn public_keys(&self) -> &tidvar_core::keys::PublicKeys {
         &self.keys.public
     }
@@ -180,6 +233,7 @@ impl Payer {
             openings: SavedOpenings(self.seal.openings().to_vec()),
             sync: self.sync.as_ref().map(SyncState::snapshot).transpose()?,
             consumed: self.consumed.clone(),
+            record: self.record.clone(),
             owner: reddsa::VerificationKey::from(&record_key).into(),
         };
         Ok(Zeroizing::new(
@@ -224,11 +278,22 @@ impl Payer {
         if unique.len() != backup.consumed.len() {
             return Err(PayerError::Backup);
         }
-        Ok(Self {
+        let mut restored = Self {
             keys,
             seal,
             sync,
             consumed: backup.consumed,
-        })
+            record: None,
+        };
+        if let Some(record) = backup.record {
+            record.verify()?;
+            let expected =
+                restored.record_body(root, record.body.offer.clone(), record.body.terms.clone())?;
+            if expected.canonical()? != record.body.canonical()? {
+                return Err(PayerError::Backup);
+            }
+            restored.record = Some(record);
+        }
+        Ok(restored)
     }
 }

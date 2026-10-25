@@ -41,6 +41,30 @@ fn complete_setup_and_recovery_keep_keys_seal_and_consumed_nonces()
     let encoded = commitment.serialize()?;
     payer.consume_commitment(&encoded)?;
     assert!(payer.consume_commitment(&encoded).is_err());
+    let service_key = reddsa::SigningKey::<reddsa::orchard::SpendAuth>::new(OsRng);
+    let offer = tidvar_core::record::Offer {
+        version: 1,
+        network: tidvar_core::record::Network::Testnet,
+        service_name: "Tidvar VPN".to_owned(),
+        address: service.public.address.clone(),
+        maximum_lifetime_ms: 30 * 86_400_000,
+        vpn_ms_per_zat: 6000,
+        service_key: reddsa::VerificationKey::from(&service_key).into(),
+    };
+    let terms = tidvar_core::record::Terms {
+        funded: tidvar_core::params::Amount::try_from(100_000)?,
+        open_ms: now * 1000,
+        lifetime: tidvar_core::params::Lifetime::Days3,
+        open_height: 4_541_167,
+        return_address: service.public.address.clone(),
+    };
+    let body = payer.record_body(&root, offer.clone(), terms.clone())?;
+    let partial = tidvar_core::record::ServiceSigned::sign(body, &service_key, &mut OsRng)?;
+    let record = payer.approve_record(&root, offer, terms, partial, &mut OsRng)?;
+    record.verify()?;
+    let mut changed = record.clone();
+    changed.body.terms.funded = tidvar_core::params::Amount::try_from(100_001)?;
+    assert!(changed.verify().is_err());
     let backup = payer.backup(&root)?;
     let phrase = root.phrase()?;
     let restored_root = Root::from_phrase(&phrase)?;

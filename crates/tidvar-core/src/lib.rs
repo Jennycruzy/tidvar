@@ -4,3 +4,5 @@ pub mod params;
 
 pub mod encoding;
 pub mod keys;
+
+pub mod record;

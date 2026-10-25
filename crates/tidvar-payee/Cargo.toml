@@ -1,0 +1,24 @@
+[package]
+name = "tidvar-payee"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+tidvar-core = {path="../tidvar-core"}
+tidvar-seal = {path="../tidvar-seal"}
+rand_core.workspace = true
+reddsa.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+zcash_protocol.workspace = true
+
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+rusqlite = {version="0.37",features=["bundled"]}
+
+[lints]
+workspace = true
