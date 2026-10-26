@@ -16,6 +16,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 #[derive(Debug, Error)]
 pub enum PayerError {
+    #[error("A request is waiting for its receipt. Retry it before starting another step.")]
+    Pending,
     #[error("The saved tab could not be verified. Keep your backup and try again.")]
     Backup,
     #[error(transparent)]
@@ -72,6 +74,8 @@ pub struct Payer {
     record: Option<tidvar_core::record::SignedRecord>,
     pending: Option<SignedTransaction>,
     paid: u64,
+    channel: Channel,
+    authorizer: tidvar_core::ledger::Ledger,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -96,6 +100,10 @@ struct Backup {
     pending: Option<SignedTransaction>,
     #[serde(default)]
     paid: u64,
+    #[serde(default)]
+    channel: Channel,
+    #[serde(default)]
+    authorizer: tidvar_core::ledger::Ledger,
     #[serde(with = "tidvar_core::encoding::fixed32")]
     owner: [u8; 32],
 }
@@ -157,6 +165,8 @@ impl PendingPayer {
             record: None,
             pending: None,
             paid: 0,
+            channel: Channel::default(),
+            authorizer: tidvar_core::ledger::Ledger::default(),
         })
     }
 }
@@ -416,6 +426,8 @@ impl Payer {
             record: self.record.clone(),
             pending: self.pending.clone(),
             paid: self.paid,
+            channel: self.channel.clone(),
+            authorizer: self.authorizer.clone(),
             owner: reddsa::VerificationKey::from(&record_key).into(),
         };
         Ok(Zeroizing::new(
@@ -468,6 +480,8 @@ impl Payer {
             record: None,
             pending: backup.pending,
             paid: backup.paid,
+            channel: backup.channel,
+            authorizer: backup.authorizer,
         };
         if let Some(record) = backup.record {
             record.verify()?;
@@ -476,14 +490,279 @@ impl Payer {
             if expected.canonical()? != record.body.canonical()? {
                 return Err(PayerError::Backup);
             }
+            restored
+                .authorizer
+                .validate(record.body.terms.funded)
+                .map_err(|_| PayerError::Backup)?;
+            if restored
+                .authorizer
+                .balance()
+                .map_err(|_| PayerError::Backup)?
+                .paid
+                .value()
+                > restored.paid
+            {
+                return Err(PayerError::Backup);
+            }
             if restored.paid > record.body.maximum_payment.value() {
                 return Err(PayerError::Backup);
             }
             restored.record = Some(record);
         }
-        if restored.record.is_none() && restored.paid != 0 {
+        if restored.record.is_none()
+            && (restored.paid != 0
+                || restored.channel.next_k != 1
+                || restored.channel.pending.is_some())
+        {
             return Err(PayerError::Backup);
         }
+        if restored.channel.next_k == 0
+            || restored.channel.next_k.is_multiple_of(2)
+            || (restored.channel.next_k == 1) != restored.channel.previous.is_none()
+        {
+            return Err(PayerError::Backup);
+        }
+        if restored
+            .channel
+            .pending_paid
+            .is_some_and(|paid| paid > restored.paid)
+            || (restored.channel.pending.is_none() && restored.channel.pending_paid.is_some())
+        {
+            return Err(PayerError::Backup);
+        }
+        if let Some(pending) = &restored.channel.pending {
+            let record = restored.record.as_ref().ok_or(PayerError::Backup)?;
+            if !pending.message.follows(
+                tidvar_core::transport::Id(record.body.tab_id),
+                restored.channel.next_k,
+                restored.channel.previous,
+            ) {
+                return Err(PayerError::Backup);
+            }
+            pending
+                .verify(record.body.payer_record_key)
+                .map_err(|_| PayerError::Backup)?;
+        }
         Ok(restored)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Channel {
+    next_k: u64,
+    previous: Option<tidvar_core::transport::Id>,
+    pending: Option<tidvar_core::transport::Authenticated>,
+    #[serde(default)]
+    pending_paid: Option<u64>,
+}
+impl Default for Channel {
+    fn default() -> Self {
+        Self {
+            next_k: 1,
+            previous: None,
+            pending: None,
+            pending_paid: None,
+        }
+    }
+}
+impl Payer {
+    pub fn prepare_request(
+        &mut self,
+        root: &Root,
+        body: serde_json::Value,
+    ) -> Result<tidvar_core::transport::Authenticated, PayerError> {
+        if let Some(pending) = &self.channel.pending {
+            if pending.message.body != body {
+                return Err(PayerError::Pending);
+            }
+            return Ok(pending.clone());
+        }
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        let message = tidvar_core::transport::Message {
+            tab_id: tidvar_core::transport::Id(record.body.tab_id),
+            k: self.channel.next_k,
+            previous: self.channel.previous,
+            body,
+        };
+        let signed = tidvar_core::transport::Authenticated::sign(
+            message,
+            &root.signing_key(&record.body.tab_id)?,
+            &mut rand_core::OsRng,
+        )
+        .map_err(|_| PayerError::Backup)?;
+        self.channel.pending = Some(signed.clone());
+        Ok(signed)
+    }
+    pub fn pending_request(&self) -> Option<&tidvar_core::transport::Authenticated> {
+        self.channel.pending.as_ref()
+    }
+    pub fn accept_reply(
+        &mut self,
+        reply: tidvar_core::transport::Message<serde_json::Value>,
+    ) -> Result<serde_json::Value, PayerError> {
+        let pending = self.channel.pending.as_ref().ok_or(PayerError::Backup)?;
+        let hash = pending.message.hash().map_err(|_| PayerError::Backup)?;
+        if !reply.follows(
+            pending.message.tab_id,
+            pending.message.k.checked_add(1).ok_or(PayerError::Backup)?,
+            Some(hash),
+        ) {
+            return Err(PayerError::Backup);
+        }
+        let previous = reply.hash().map_err(|_| PayerError::Backup)?;
+        if let Some(previous) = self.channel.pending_paid {
+            match reply.body.get("step").and_then(|value| value.as_str()) {
+                Some("refused") => {
+                    self.paid = previous;
+                    self.pending = None;
+                }
+                Some("accepted") => {}
+                _ => return Err(PayerError::Backup),
+            }
+        }
+        self.channel.pending_paid = None;
+        self.channel.next_k = reply.k.checked_add(1).ok_or(PayerError::Backup)?;
+        self.channel.previous = Some(previous);
+        self.channel.pending = None;
+        Ok(reply.body)
+    }
+    pub fn signed_amount(&self) -> u64 {
+        self.paid
+    }
+}
+
+impl Payer {
+    pub fn prepare_iou_request(
+        &mut self,
+        root: &Root,
+        prepared: &tidvar_core::iou::Prepared,
+        services: Vec<tidvar_core::frost::Commitment>,
+        tree: tidvar_chain::service::TreeState,
+    ) -> Result<tidvar_core::transport::Authenticated, PayerError> {
+        if self.channel.pending.is_some() {
+            return Err(PayerError::Pending);
+        }
+        if prepared.cooperative {
+            return Err(PayerError::Backup);
+        }
+        let previous = self.paid;
+        let signed = self.sign_transaction(
+            &prepared.pczt,
+            prepared.amount,
+            prepared.anchor_height,
+            false,
+            tree,
+            services,
+        )?;
+        let payment = tidvar_core::iou::Request {
+            pczt: prepared.pczt.clone(),
+            amount: tidvar_core::params::Amount::try_from(prepared.amount)
+                .map_err(|_| PayerError::Backup)?,
+            anchor_height: prepared.anchor_height,
+            messages: signed.messages,
+            shares: signed.shares,
+        };
+        let request =
+            self.prepare_request(root, serde_json::json!({"step":"iou","payment":payment}))?;
+        self.channel.pending_paid = Some(previous);
+        Ok(request)
+    }
+    pub fn commitment_unused(
+        &self,
+        commitment: &tidvar_core::frost::Commitment,
+    ) -> Result<bool, PayerError> {
+        commitment.verify().map_err(|_| PayerError::Backup)?;
+        let hash = encoding::hash(
+            b"TidvarUsedNonce",
+            &encoding::encode_bytes(&[&commitment.data]).map_err(|_| PayerError::Backup)?,
+        )
+        .map_err(|_| PayerError::Backup)?;
+        Ok(!self.consumed.contains(&hash))
+    }
+}
+
+impl Payer {
+    pub fn accept_reply_at(
+        &mut self,
+        reply: tidvar_core::transport::Message<serde_json::Value>,
+        now_ms: u64,
+    ) -> Result<serde_json::Value, PayerError> {
+        let mut authorizer = self.authorizer.clone();
+        let pending = self.channel.pending.as_ref().ok_or(PayerError::Backup)?;
+        if pending
+            .message
+            .body
+            .get("step")
+            .and_then(|value| value.as_str())
+            == Some("iou")
+            && reply.body.get("step").and_then(|value| value.as_str()) == Some("accepted")
+        {
+            let amount = pending
+                .message
+                .body
+                .get("payment")
+                .and_then(|payment| payment.get("amount"))
+                .and_then(|amount| amount.as_u64())
+                .ok_or(PayerError::Backup)?;
+            let funded = self
+                .record
+                .as_ref()
+                .ok_or(PayerError::Backup)?
+                .body
+                .terms
+                .funded;
+            authorizer
+                .accept(
+                    funded,
+                    tidvar_core::params::Amount::try_from(amount)
+                        .map_err(|_| PayerError::Backup)?,
+                    now_ms,
+                )
+                .map_err(|_| PayerError::Backup)?;
+            let balance = authorizer.balance().map_err(|_| PayerError::Backup)?;
+            if !balance.paused
+                && !balance.running
+                && tidvar_core::params::can_start_vpn(balance.paid, balance.used)
+            {
+                authorizer.resume(now_ms).map_err(|_| PayerError::Backup)?;
+            }
+        }
+        let body = self.accept_reply(reply)?;
+        self.authorizer = authorizer;
+        Ok(body)
+    }
+    pub fn authorization_balance(
+        &mut self,
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayerError> {
+        self.authorizer
+            .tick(now_ms)
+            .map_err(|_| PayerError::Backup)?;
+        self.authorizer.balance().map_err(|_| PayerError::Backup)
+    }
+    pub fn payment_target(
+        &mut self,
+        now_ms: u64,
+        hidden: bool,
+        service_used: u64,
+    ) -> Result<u64, PayerError> {
+        let funded = self
+            .record
+            .as_ref()
+            .ok_or(PayerError::Backup)?
+            .body
+            .terms
+            .funded;
+        let balance = self.authorization_balance(now_ms)?;
+        if balance.paused || balance.closing {
+            return Err(PayerError::Backup);
+        }
+        let used = balance.used.min(
+            tidvar_core::params::Amount::try_from(service_used).map_err(|_| PayerError::Backup)?,
+        );
+        tidvar_core::params::payment_target(funded, used, hidden)
+            .map(|amount| amount.value())
+            .map_err(|_| PayerError::Backup)
     }
 }

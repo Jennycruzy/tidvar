@@ -62,8 +62,22 @@ impl Store {
                 request BLOB CHECK(request IS NULL OR length(request)=32),
                 witness BLOB CHECK(witness IS NULL OR length(witness)=32),
                 receipt BLOB
+            );
+            CREATE TABLE IF NOT EXISTS message_exchanges (
+                tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
+                next_k INTEGER NOT NULL CHECK(next_k>0),
+                previous BLOB NOT NULL CHECK(length(previous)=32),
+                last_request BLOB NOT NULL CHECK(length(last_request)=32),
+                reply BLOB NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS funding (
+                tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
+                snapshot BLOB NOT NULL
             );",
             )
+            .map_err(|_| PayeeError::Storage)?;
+        connection
+            .busy_timeout(std::time::Duration::from_millis(100))
             .map_err(|_| PayeeError::Storage)?;
         Ok(Self { connection })
     }
@@ -426,5 +440,154 @@ impl Store {
             .map_err(|_| PayeeError::Storage)?;
         transaction.commit().map_err(|_| PayeeError::Storage)?;
         Ok(result)
+    }
+}
+
+type ExchangeRow = (u64, Vec<u8>, Vec<u8>, Vec<u8>);
+fn request_cursor(
+    connection: &Connection,
+    request: &tidvar_core::transport::Authenticated,
+) -> Result<Option<Vec<u8>>, PayeeError> {
+    let message = &request.message;
+    let hash = message.hash().map_err(|_| PayeeError::Exchange)?;
+    let previous: Option<ExchangeRow> = connection
+        .query_row(
+            "SELECT next_k,previous,last_request,reply FROM message_exchanges WHERE tab_id=?1",
+            params![message.tab_id.0.as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()
+        .map_err(|_| PayeeError::Storage)?;
+    if let Some((next_k, previous, last, reply)) = previous {
+        if last == hash.0 {
+            return Ok(Some(reply));
+        }
+        let previous: [u8; 32] = previous.try_into().map_err(|_| PayeeError::Storage)?;
+        if !message.follows(
+            message.tab_id,
+            next_k,
+            Some(tidvar_core::transport::Id(previous)),
+        ) {
+            return Err(PayeeError::Exchange);
+        }
+    } else if message.k != 1 || message.previous.is_some() {
+        return Err(PayeeError::Exchange);
+    }
+    Ok(None)
+}
+impl Store {
+    pub fn cached_reply(
+        &self,
+        request: &tidvar_core::transport::Authenticated,
+    ) -> Result<Option<Vec<u8>>, PayeeError> {
+        let tab = self
+            .load(&request.message.tab_id.0)?
+            .ok_or(PayeeError::Terms)?;
+        request
+            .verify(tab.record.body.payer_record_key)
+            .map_err(|_| PayeeError::Exchange)?;
+        request_cursor(&self.connection, request)
+    }
+    pub fn save_reply(
+        &mut self,
+        request: &tidvar_core::transport::Authenticated,
+        body: serde_json::Value,
+    ) -> Result<Vec<u8>, PayeeError> {
+        if let Some(reply) = self.cached_reply(request)? {
+            return Ok(reply);
+        }
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| PayeeError::Storage)?;
+        if let Some(reply) = request_cursor(&transaction, request)? {
+            return Ok(reply);
+        }
+        let hash = request.message.hash().map_err(|_| PayeeError::Exchange)?;
+        let reply = tidvar_core::transport::Message {
+            tab_id: request.message.tab_id,
+            k: request
+                .message
+                .k
+                .checked_add(1)
+                .ok_or(PayeeError::Exchange)?,
+            previous: Some(hash),
+            body,
+        };
+        let encoded = json(&reply)?;
+        let previous = reply.hash().map_err(|_| PayeeError::Exchange)?;
+        transaction.execute(
+            "INSERT INTO message_exchanges (tab_id,next_k,previous,last_request,reply) VALUES (?1,?2,?3,?4,?5)
+             ON CONFLICT(tab_id) DO UPDATE SET next_k=excluded.next_k,previous=excluded.previous,last_request=excluded.last_request,reply=excluded.reply",
+            params![reply.tab_id.0.as_slice(),reply.k.checked_add(1).ok_or(PayeeError::Exchange)?,previous.0.as_slice(),hash.0.as_slice(),encoded],
+        ).map_err(|_|PayeeError::Storage)?;
+        transaction.commit().map_err(|_| PayeeError::Storage)?;
+        Ok(encoded)
+    }
+    pub fn available_nonces<R: rand_core::RngCore + rand_core::CryptoRng>(
+        &mut self,
+        id: &[u8; 32],
+        rng: &mut R,
+    ) -> Result<Vec<tidvar_core::frost::Commitment>, PayeeError> {
+        let mut statement=self.connection.prepare(
+            "SELECT commitment FROM signing_nonces WHERE tab_id=?1 AND state='issued' AND message IS NULL AND intent IS NULL ORDER BY id LIMIT 32"
+        ).map_err(|_|PayeeError::Storage)?;
+        let encoded = statement
+            .query_map(params![id.as_slice()], |row| row.get::<_, Vec<u8>>(0))
+            .map_err(|_| PayeeError::Storage)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| PayeeError::Storage)?;
+        drop(statement);
+        let mut public = encoded
+            .into_iter()
+            .map(|bytes| {
+                serde_json::from_slice::<tidvar_core::frost::Commitment>(&bytes)
+                    .map_err(|_| PayeeError::Storage)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for commitment in &public {
+            commitment.verify()?;
+        }
+        if public.len() < 32 {
+            public.extend(self.issue_nonces(id, 32 - public.len(), None, rng)?);
+        }
+        public.sort_by_key(|commitment| commitment.id);
+        Ok(public)
+    }
+    pub fn funding_snapshot(&self, id: &[u8; 32]) -> Result<Option<Vec<u8>>, PayeeError> {
+        self.connection
+            .query_row(
+                "SELECT snapshot FROM funding WHERE tab_id=?1",
+                params![id.as_slice()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| PayeeError::Storage)
+    }
+    pub fn save_funding_snapshot(
+        &mut self,
+        id: &[u8; 32],
+        snapshot: &[u8],
+    ) -> Result<(), PayeeError> {
+        self.connection.execute("INSERT INTO funding (tab_id,snapshot) VALUES (?1,?2) ON CONFLICT(tab_id) DO UPDATE SET snapshot=excluded.snapshot",
+            params![id.as_slice(),snapshot]).map_err(|_|PayeeError::Storage)?;
+        Ok(())
+    }
+}
+
+impl Store {
+    pub fn payment_receipt(
+        &self,
+        id: &[u8; 32],
+        hash: &[u8; 32],
+    ) -> Result<Option<PaymentReceipt>, PayeeError> {
+        if let Some(row) = runtime(&self.connection, id)?
+            && row.2.as_deref() == Some(hash.as_slice())
+        {
+            return serde_json::from_slice(row.4.as_deref().ok_or(PayeeError::Storage)?)
+                .map(Some)
+                .map_err(|_| PayeeError::Storage);
+        }
+        Ok(None)
     }
 }

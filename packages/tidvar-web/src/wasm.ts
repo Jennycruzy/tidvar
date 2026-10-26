@@ -12,6 +12,15 @@ export interface Payer {
   funding_request(): string;
   prepare_transaction(amount: bigint, cooperative: boolean): string;
   sign_transaction(prepared: string, services: string, tree: Uint8Array): string;
+  prepare_request(body: string): string;
+  pending_request(): string;
+  accept_reply(reply: string, now: bigint): string;
+  signed_amount(): bigint;
+  prepare_iou_request(prepared: string, services: string, tree: Uint8Array): string;
+  commitment_unused(commitment: string): boolean;
+  funding_note_count(): number;
+  payment_target(now: bigint, hidden: boolean, serviceUsed: bigint): bigint;
+  authorization_balance(now: bigint): string;
   backup_plaintext(): Uint8Array;
   start_sync(reply: Uint8Array): void;
   apply_blocks(reply: Uint8Array): void;

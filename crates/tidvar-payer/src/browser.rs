@@ -266,16 +266,8 @@ impl BrowserPayer {
     }
 }
 
-#[derive(Serialize, serde::Deserialize)]
-struct Prepared {
-    #[serde(with = "tidvar_core::encoding::bytes")]
-    pczt: Vec<u8>,
-    #[serde(with = "tidvar_core::encoding::fixed32")]
-    sighash: [u8; 32],
-    amount: u64,
-    anchor_height: u64,
-    cooperative: bool,
-}
+use tidvar_core::iou::Prepared;
+
 #[wasm_bindgen]
 impl BrowserPayer {
     pub fn prepare_transaction(&self, amount: u64, cooperative: bool) -> Result<String, JsValue> {
@@ -323,5 +315,99 @@ impl BrowserPayer {
                 )
                 .map_err(error)?,
         )
+    }
+}
+
+#[wasm_bindgen]
+impl BrowserPayer {
+    pub fn prepare_request(&mut self, body: &str) -> Result<String, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .prepare_request(&self.root, parse(body)?)
+                .map_err(error)?,
+        )
+    }
+    pub fn pending_request(&self) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        json(&payer.pending_request())
+    }
+    pub fn accept_reply(&mut self, reply: &str, now_ms: u64) -> Result<String, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .accept_reply_at(parse(reply)?, now_ms)
+                .map_err(error)?,
+        )
+    }
+    pub fn signed_amount(&self) -> Result<u64, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        Ok(payer.signed_amount())
+    }
+}
+
+#[wasm_bindgen]
+impl BrowserPayer {
+    pub fn prepare_iou_request(
+        &mut self,
+        prepared: &str,
+        services: &str,
+        tree: &[u8],
+    ) -> Result<String, JsValue> {
+        let prepared: tidvar_core::iou::Prepared = parse(prepared)?;
+        let services = parse(services)?;
+        let tree = tidvar_chain::transport::unary(tree).map_err(error)?;
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .prepare_iou_request(&self.root, &prepared, services, tree)
+                .map_err(error)?,
+        )
+    }
+    pub fn commitment_unused(&self, commitment: &str) -> Result<bool, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        payer.commitment_unused(&parse(commitment)?).map_err(error)
+    }
+    pub fn funding_note_count(&self) -> Result<u32, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        let notes = payer
+            .sync()
+            .ok_or_else(wrong_state)?
+            .funding_notes()
+            .map_err(error)?;
+        u32::try_from(notes.len()).map_err(error)
+    }
+    pub fn payment_target(
+        &mut self,
+        now_ms: u64,
+        hidden: bool,
+        service_used: u64,
+    ) -> Result<u64, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        payer
+            .payment_target(now_ms, hidden, service_used)
+            .map_err(error)
+    }
+    pub fn authorization_balance(&mut self, now_ms: u64) -> Result<String, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(&payer.authorization_balance(now_ms).map_err(error)?)
     }
 }

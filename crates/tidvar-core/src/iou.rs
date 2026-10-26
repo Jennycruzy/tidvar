@@ -419,3 +419,15 @@ impl Request {
         encoding::hash(b"TidvarIou", &hash.0).map_err(|_| IouError::Transaction)
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Prepared {
+    #[serde(with = "crate::encoding::bytes")]
+    pub pczt: Vec<u8>,
+    #[serde(with = "crate::encoding::fixed32")]
+    pub sighash: [u8; 32],
+    pub amount: u64,
+    pub anchor_height: u64,
+    pub cooperative: bool,
+}

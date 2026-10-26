@@ -88,6 +88,31 @@ fn separate_service_saves_only_its_own_share_after_both_signatures()
         assert_eq!(saved.keys.public.address, p.public_keys().address);
         assert_eq!(*saved.keys.secret_bytes()?, *accepted.keys.secret_bytes()?);
         saved.record.verify()?;
+        let id = accepted.record.body.tab_id;
+        let body = serde_json::json!({"step":"pause"});
+        let request = p.prepare_request(&root, body.clone())?;
+        request.verify(saved.record.body.payer_record_key)?;
+        let mut changed = request.clone();
+        changed.message.body = serde_json::json!({"step":"resume"});
+        assert!(changed.verify(saved.record.body.payer_record_key).is_err());
+        p = tidvar_payer::engine::Payer::restore(&root, &p.backup(&root)?)?;
+        let retry = p.prepare_request(&root, body.clone())?;
+        assert_eq!(serde_json::to_vec(&request)?, serde_json::to_vec(&retry)?);
+        assert!(store.cached_reply(&request)?.is_none());
+        let balance = store.pause_vpn(&id, now)?;
+        let reply = store.save_reply(&request, serde_json::to_value(balance)?)?;
+        assert_eq!(
+            store.cached_reply(&request)?.ok_or("Missing receipt")?,
+            reply
+        );
+        p.accept_reply(serde_json::from_slice(&reply)?)?;
+        p = tidvar_payer::engine::Payer::restore(&root, &p.backup(&root)?)?;
+        let next = p.prepare_request(&root, body)?;
+        assert_eq!(next.message.k, request.message.k + 2);
+        let balance = store.pause_vpn(&id, now)?;
+        let reply = store.save_reply(&next, serde_json::to_value(balance)?)?;
+        p.accept_reply(serde_json::from_slice(&reply)?)?;
+        assert!(store.cached_reply(&request).is_err());
         assert_eq!(
             std::fs::metadata(&path)?.permissions().mode() & 0o777,
             0o600

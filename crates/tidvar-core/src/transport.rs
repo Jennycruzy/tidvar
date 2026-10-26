@@ -4,7 +4,7 @@ use serde_json::Value;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Id(#[serde(with = "crate::encoding::fixed32")] pub [u8; 32]);
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Message<T> {
     pub tab_id: Id,
@@ -79,5 +79,37 @@ impl<T: Serialize> Message<T> {
     }
     pub fn follows(&self, id: Id, k: u64, previous: Option<Id>) -> bool {
         self.tab_id == id && self.k == k && self.previous == previous && self.k > 0
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Authenticated {
+    pub message: Message<Value>,
+    #[serde(with = "crate::encoding::bytes")]
+    pub signature: Vec<u8>,
+}
+impl Authenticated {
+    pub fn sign<R: rand_core::RngCore + rand_core::CryptoRng>(
+        message: Message<Value>,
+        key: &reddsa::SigningKey<reddsa::orchard::SpendAuth>,
+        rng: &mut R,
+    ) -> Result<Self, EncodingError> {
+        let signature: [u8; 64] = key.sign(rng, &message.hash()?.0).into();
+        Ok(Self {
+            message,
+            signature: signature.to_vec(),
+        })
+    }
+    pub fn verify(&self, public: [u8; 32]) -> Result<(), EncodingError> {
+        let signature: [u8; 64] = self
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| EncodingError::Domain)?;
+        reddsa::VerificationKey::<reddsa::orchard::SpendAuth>::try_from(public)
+            .map_err(|_| EncodingError::Domain)?
+            .verify(&self.message.hash()?.0, &reddsa::Signature::from(signature))
+            .map_err(|_| EncodingError::Domain)
     }
 }

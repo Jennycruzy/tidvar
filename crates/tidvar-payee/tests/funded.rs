@@ -489,3 +489,89 @@ async fn stored_chain_payments_survive_recovery_and_replace_only_the_old_nonce()
     );
     Ok(())
 }
+
+#[tokio::test]
+#[ignore = "Requires a real browser-authenticated payment over stored chain inputs; never broadcasts"]
+async fn authenticated_browser_payment_has_a_durable_receipt()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::{io::Write, os::unix::fs::OpenOptionsExt};
+    let directory = PathBuf::from(std::env::var("TIDVAR_HISTORY_DATA_DIR")?);
+    let request: tidvar_core::transport::Authenticated =
+        serde_json::from_slice(&std::fs::read(directory.join("authenticated-iou.json"))?)?;
+    let id = request.message.tab_id.0;
+    let mut store = Store::open(&directory.join("payee.sqlite"))?;
+    assert!(store.cached_reply(&request)?.is_none());
+    let tab = store.load(&id)?.ok_or("Missing actual accepted tab")?;
+    let payment: tidvar_core::iou::Request = serde_json::from_value(
+        request
+            .message
+            .body
+            .get("payment")
+            .ok_or("Missing actual browser payment")?
+            .clone(),
+    )?;
+    let mut client = Client::connect(TESTNET_SERVER).await?;
+    let mut state = SyncState::new(
+        &tab.keys.public.viewing_key,
+        client
+            .tree(u64::from(tab.record.body.terms.open_height) - 1)
+            .await?,
+    )?;
+    while state.height < payment.anchor_height {
+        let start = state.height + 1;
+        for block in client
+            .blocks(start, (start + 127).min(payment.anchor_height))
+            .await?
+        {
+            state.apply(block)?;
+        }
+    }
+    state.verify_tip(&client.tree(state.height).await?)?;
+    let target = u32::try_from(state.height)?
+        .checked_add(1)
+        .ok_or("Invalid target height")?;
+    let proofs = Proofs::build();
+    let verified = tidvar_payee::payments::verify(
+        &tab,
+        payment,
+        &state.funding_notes()?,
+        TransactionContext {
+            target,
+            kind: Kind::Payment,
+            anchor: state.root(),
+        },
+        store.payment_witness(&id)?,
+        &proofs,
+        &mut OsRng,
+    )?;
+    let now = u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis(),
+    )?;
+    let receipt = store.accept_iou(verified, now)?;
+    let response = store.save_reply(
+        &request,
+        serde_json::json!({"step":"accepted","receipt":receipt}),
+    )?;
+    drop(store);
+    let store = Store::open(&directory.join("payee.sqlite"))?;
+    assert_eq!(
+        store
+            .cached_reply(&request)?
+            .ok_or("Missing actual receipt")?,
+        response
+    );
+    assert!(store.payment_receipt(&id, &receipt.request)?.is_some());
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(directory.join("authenticated-reply.json"))?;
+    file.write_all(&response)?;
+    file.sync_all()?;
+    println!(
+        "TESTNET authenticated historical payment PASS: actual browser root/signature shares; paid and nonce saved; hash-chain receipt identical after restart. No broadcast."
+    );
+    Ok(())
+}

@@ -5,6 +5,8 @@ pub mod store;
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
+    #[error("This request does not follow the saved exchange. Retry the same request.")]
+    Exchange,
     #[error(transparent)]
     Transaction(#[from] tidvar_core::iou::IouError),
     #[error(transparent)]

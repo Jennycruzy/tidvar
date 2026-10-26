@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod opening;
+mod payments;
 use axum::{
     Json, Router,
     body::Bytes,
@@ -39,12 +40,33 @@ pub struct App {
     work: Arc<Semaphore>,
     limits: Arc<Mutex<BTreeMap<IpAddr, Limits>>>,
     web: Arc<PathBuf>,
+    proofs: Arc<tidvar_payee::proof::Proofs>,
+    payments: Arc<Mutex<PaymentWindows>>,
 }
+type PaymentWindows = BTreeMap<[u8; 32], (Instant, u32)>;
 struct Limits {
     since: Instant,
     ids: BTreeSet<[u8; 32]>,
 }
 impl App {
+    fn payment_limit(&self, id: [u8; 32]) -> Result<(), Failure> {
+        let mut payments = self.payments.lock().map_err(|_| Failure::internal())?;
+        payments.retain(|_, (since, _)| since.elapsed().as_secs() < 1);
+        let (since, count) = payments.entry(id).or_insert((Instant::now(), 0));
+        if since.elapsed().as_secs() >= 1 {
+            *since = Instant::now();
+            *count = 0;
+        }
+        if *count >= 10 {
+            return Err(Failure(
+                StatusCode::TOO_MANY_REQUESTS,
+                "This tab is sending payments too quickly. Wait a second and retry.",
+            ));
+        }
+        *count += 1;
+        Ok(())
+    }
+
     fn limit(&self, ip: IpAddr, id: [u8; 32]) -> Result<(), Failure> {
         let mut limits = self.limits.lock().map_err(|_| Failure::internal())?;
         limits.retain(|_, window| window.since.elapsed().as_secs() < 3600);
@@ -215,10 +237,14 @@ async fn main() -> anyhow::Result<()> {
         work: Arc::new(Semaphore::new(1)),
         limits: Arc::new(Mutex::new(BTreeMap::new())),
         web: Arc::new(web),
+        proofs: Arc::new(tidvar_payee::proof::Proofs::build()),
+        payments: Arc::new(Mutex::new(BTreeMap::new())),
     };
     let router = Router::new()
         .route("/v1/offer", get(offer))
         .route("/v1/tabs", post(opening::handle))
+        .route("/v1/tabs/{id}/nonces", get(payments::nonces))
+        .route("/v1/tabs/{id}/iou", post(payments::iou))
         .route("/v1/lwd", post(relay))
         .fallback(files)
         .layer(DefaultBodyLimit::max(MAX_MESSAGE_BYTES))
