@@ -5,6 +5,8 @@ pub mod store;
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
+    #[error("The VPN is full. Keep your prepaid time and try again later.")]
+    Capacity,
     #[error("This request does not follow the saved exchange. Retry the same request.")]
     Exchange,
     #[error(transparent)]

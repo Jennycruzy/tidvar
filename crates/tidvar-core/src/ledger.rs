@@ -41,6 +41,19 @@ impl Default for Ledger {
     }
 }
 impl Ledger {
+    pub fn recover(&mut self) {
+        self.active = None;
+        self.paused = true;
+    }
+    pub fn unpause(&mut self, now_ms: u64) -> Result<(), AmountError> {
+        if self.closing {
+            return Err(AmountError::Used);
+        }
+        self.tick(now_ms)?;
+        self.paused = false;
+        Ok(())
+    }
+
     pub fn balance(&self) -> Result<Balance, AmountError> {
         let used = params::vpn_used(self.vpn_ms)?.min(self.paid);
         let paid_until_ms = self.active.as_ref().map(|active| active.paid_until_ms);
@@ -239,6 +252,28 @@ mod tests {
         restored.tick(start + 39_001)?;
         assert!(!restored.balance()?.running);
         restored.validate(funded)?;
+        Ok(())
+    }
+    #[test]
+    fn restart_recovery_waits_for_the_payer_and_keeps_credit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let start = now()?;
+        let funded = Amount::try_from(100_000)?;
+        let mut ledger = Ledger::default();
+        ledger.accept(funded, Amount::try_from(10)?, start)?;
+        ledger.resume(start)?;
+        ledger.tick(start + 6000)?;
+        ledger.recover();
+        ledger.validate(funded)?;
+        let balance = ledger.balance()?;
+        assert!(balance.paused && !balance.running);
+        assert_eq!(balance.used.value(), 1);
+        ledger.tick(start + 60_000)?;
+        assert_eq!(ledger.balance()?.vpn_ms, 6000);
+        ledger.unpause(start + 60_000)?;
+        assert!(!ledger.balance()?.paused && !ledger.balance()?.running);
+        ledger.close(start + 60_001)?;
+        assert!(ledger.unpause(start + 60_002).is_err());
         Ok(())
     }
 }

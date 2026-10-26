@@ -7,6 +7,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+base64.workspace = true
 tidvar-core = {path="../../crates/tidvar-core"}
 tidvar-seal = {path="../../crates/tidvar-seal"}
 tidvar-chain = {path="../../crates/tidvar-chain"}

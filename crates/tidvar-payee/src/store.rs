@@ -73,6 +73,11 @@ impl Store {
             CREATE TABLE IF NOT EXISTS funding (
                 tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
                 snapshot BLOB NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS peers (
+                slot INTEGER PRIMARY KEY AUTOINCREMENT CHECK(slot>0 AND slot<65534),
+                tab_id BLOB NOT NULL UNIQUE REFERENCES tabs(id),
+                public_key BLOB NOT NULL UNIQUE CHECK(length(public_key)=32)
             );",
             )
             .map_err(|_| PayeeError::Storage)?;
@@ -589,5 +594,103 @@ impl Store {
                 .map_err(|_| PayeeError::Storage);
         }
         Ok(None)
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct Peer {
+    #[serde(with = "tidvar_core::encoding::fixed32")]
+    pub tab_id: [u8; 32],
+    #[serde(with = "tidvar_core::encoding::fixed32")]
+    pub public_key: [u8; 32],
+    pub slot: u32,
+}
+impl Peer {
+    pub fn address(&self) -> Result<std::net::Ipv4Addr, PayeeError> {
+        let host = self
+            .slot
+            .checked_add(1)
+            .filter(|host| *host < 65535)
+            .ok_or(PayeeError::Terms)?;
+        Ok(std::net::Ipv4Addr::new(
+            10,
+            77,
+            u8::try_from(host / 256).map_err(|_| PayeeError::Terms)?,
+            u8::try_from(host % 256).map_err(|_| PayeeError::Terms)?,
+        ))
+    }
+}
+impl Store {
+    pub fn peers(&self) -> Result<Vec<Peer>, PayeeError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT tab_id,public_key,slot FROM peers ORDER BY slot")
+            .map_err(|_| PayeeError::Storage)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, u32>(2)?,
+                ))
+            })
+            .map_err(|_| PayeeError::Storage)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| PayeeError::Storage)?;
+        rows.into_iter()
+            .map(|(id, key, slot)| {
+                Ok(Peer {
+                    tab_id: id.try_into().map_err(|_| PayeeError::Storage)?,
+                    public_key: key.try_into().map_err(|_| PayeeError::Storage)?,
+                    slot,
+                })
+            })
+            .collect()
+    }
+    pub fn register_peer(
+        &mut self,
+        id: &[u8; 32],
+        public_key: [u8; 32],
+    ) -> Result<Peer, PayeeError> {
+        self.load(id)?.ok_or(PayeeError::Terms)?;
+        if public_key == [0; 32] {
+            return Err(PayeeError::Terms);
+        }
+        let peers = self.peers()?;
+        if let Some(peer) = peers.iter().find(|peer| peer.tab_id == *id) {
+            if peer.public_key != public_key {
+                return Err(PayeeError::Terms);
+            }
+            return Ok(peer.clone());
+        }
+        if peers.len() >= 50 {
+            return Err(PayeeError::Capacity);
+        }
+        self.connection
+            .execute(
+                "INSERT INTO peers (tab_id,public_key) VALUES (?1,?2)",
+                params![id.as_slice(), public_key.as_slice()],
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        self.peers()?
+            .into_iter()
+            .find(|peer| peer.tab_id == *id)
+            .ok_or(PayeeError::Storage)
+    }
+    pub fn request_vpn_resume(
+        &mut self,
+        id: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| ledger.unpause(now_ms))
+    }
+    pub fn recover_vpn(
+        &mut self,
+        id: &[u8; 32],
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| {
+            ledger.recover();
+            Ok(())
+        })
     }
 }

@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 mod opening;
 mod payments;
+mod vpn;
 use axum::{
     Json, Router,
     body::Bytes,
@@ -245,6 +246,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/tabs", post(opening::handle))
         .route("/v1/tabs/{id}/nonces", get(payments::nonces))
         .route("/v1/tabs/{id}/iou", post(payments::iou))
+        .route("/v1/tabs/{id}/vpn", post(vpn::handle))
         .route("/v1/lwd", post(relay))
         .fallback(files)
         .layer(DefaultBodyLimit::max(MAX_MESSAGE_BYTES))

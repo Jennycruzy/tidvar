@@ -1,0 +1,22 @@
+[Unit]
+Description=Tidvar testnet VPN
+After=network-online.target
+Wants=network-online.target tidvar-dns.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+WorkingDirectory=/root/tidvar
+ExecStart=/root/tidvar/target/release/tidvar-vpn
+ExecStopPost=/root/tidvar/target/release/tidvar-vpn stop
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data /root/tidvar-private/keys /etc/ufw /run
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

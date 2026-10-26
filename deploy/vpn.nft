@@ -1,0 +1,29 @@
+define wan = "eth0"
+define vpn = "tidvar"
+
+table inet tidvar_vpn {
+    chain input {
+        type filter hook input priority -10; policy accept;
+        iifname $vpn ip daddr 10.77.0.1 udp dport 53 accept
+        iifname $vpn ip daddr 10.77.0.1 tcp dport 53 accept
+        iifname $vpn ip protocol icmp accept
+        iifname $vpn drop
+    }
+    chain forward {
+        type filter hook forward priority -10; policy accept;
+        iifname $vpn oifname $vpn drop
+        iifname $vpn meta nfproto ipv6 drop
+        iifname $vpn tcp dport { 25, 465, 587, 6881-6889 } drop
+        iifname $vpn udp dport 6881 drop
+        iifname $vpn ip daddr { 0.0.0.0/8, 10.0.0.0/8, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4 } drop
+        iifname $vpn oifname $wan accept
+        oifname $vpn ct state established,related accept
+        oifname $vpn drop
+    }
+}
+table ip tidvar_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip saddr 10.77.0.0/16 oifname $wan masquerade
+    }
+}
