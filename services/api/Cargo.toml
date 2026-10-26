@@ -1,0 +1,26 @@
+[package]
+name = "tidvar-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+tidvar-core = {path="../../crates/tidvar-core"}
+tidvar-seal = {path="../../crates/tidvar-seal"}
+tidvar-chain = {path="../../crates/tidvar-chain"}
+tidvar-payee = {path="../../crates/tidvar-payee"}
+serde.workspace = true
+serde_json.workspace = true
+rand_core = {workspace=true,features=["getrandom"]}
+reddsa.workspace = true
+hex.workspace = true
+zeroize.workspace = true
+tokio.workspace = true
+axum = {version="0.8",features=["json","tokio","http1"]}
+anyhow = "1"
+prost.workspace = true
+
+[lints]
+workspace = true

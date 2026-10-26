@@ -225,3 +225,74 @@ pub fn key_from_phrase(phrase: &str) -> Result<Vec<u8>, JsValue> {
     let root = Root::from_phrase(phrase).map_err(error)?;
     Ok(root.encryption_key().map_err(error)?.to_vec())
 }
+
+#[wasm_bindgen]
+pub fn message_hash(message: &str) -> Result<String, JsValue> {
+    let value: tidvar_core::transport::Message<serde_json::Value> = parse(message)?;
+    json(&value.hash().map_err(error)?)
+}
+
+#[wasm_bindgen]
+pub fn new_open_id() -> Result<String, JsValue> {
+    use rand_core::RngCore;
+    let mut id = [0; 32];
+    OsRng.fill_bytes(&mut id);
+    json(&tidvar_core::transport::Id(id))
+}
+#[wasm_bindgen]
+pub fn round_for_terms(terms: &str) -> Result<u64, JsValue> {
+    let terms: tidvar_core::record::Terms = parse(terms)?;
+    let times = tidvar_core::params::Deadlines::new(terms.open_ms, terms.lifetime.seconds() * 1000)
+        .map_err(error)?;
+    tidvar_seal::round_at(times.refund_ms / 1000).map_err(error)
+}
+#[wasm_bindgen]
+pub fn latest_request() -> Result<Vec<u8>, JsValue> {
+    tidvar_chain::transport::request(&tidvar_chain::service::ChainSpec {}).map_err(error)
+}
+#[wasm_bindgen]
+pub fn latest_height(reply: &[u8]) -> Result<u64, JsValue> {
+    let value: tidvar_chain::service::BlockId =
+        tidvar_chain::transport::unary(reply).map_err(error)?;
+    Ok(value.height)
+}
+#[wasm_bindgen]
+impl BrowserPayer {
+    pub fn synced_height(&self) -> Result<u64, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        Ok(payer.sync().ok_or_else(wrong_state)?.height)
+    }
+}
+
+#[derive(Serialize)]
+struct Prepared {
+    #[serde(with = "tidvar_core::encoding::bytes")]
+    pczt: Vec<u8>,
+    #[serde(with = "tidvar_core::encoding::fixed32")]
+    sighash: [u8; 32],
+    amount: u64,
+    anchor_height: u64,
+    cooperative: bool,
+}
+#[wasm_bindgen]
+impl BrowserPayer {
+    pub fn prepare_transaction(&self, amount: u64, cooperative: bool) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        let checked = payer.transaction(amount, cooperative).map_err(error)?;
+        let height = payer.sync().ok_or_else(wrong_state)?.height;
+        json(&Prepared {
+            pczt: checked
+                .pczt
+                .serialize()
+                .map_err(|_| error("The transaction could not be saved."))?,
+            sighash: checked.sighash,
+            amount,
+            anchor_height: height,
+            cooperative,
+        })
+    }
+}

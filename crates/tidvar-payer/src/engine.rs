@@ -18,6 +18,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 pub enum PayerError {
     #[error("The saved tab could not be verified. Keep your backup and try again.")]
     Backup,
+    #[error(transparent)]
+    Transaction(#[from] tidvar_core::iou::IouError),
     #[error("This payment commitment has already been used.")]
     ReusedCommitment,
     #[error(transparent)]
@@ -144,6 +146,34 @@ impl PendingPayer {
     }
 }
 impl Payer {
+    pub fn transaction(
+        &self,
+        amount: u64,
+        cooperative: bool,
+    ) -> Result<tidvar_core::iou::Checked, PayerError> {
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
+        let notes = sync.funding_notes()?;
+        let kind = if cooperative {
+            tidvar_core::iou::Kind::Cooperative
+        } else {
+            tidvar_core::iou::Kind::Payment
+        };
+        let amount =
+            tidvar_core::params::Amount::try_from(amount).map_err(|_| PayerError::Backup)?;
+        let target = u32::try_from(sync.height)
+            .map_err(|_| PayerError::Backup)?
+            .checked_add(1)
+            .ok_or(PayerError::Backup)?;
+        Ok(tidvar_core::iou::build(
+            record,
+            &notes,
+            amount,
+            target,
+            kind,
+            &mut rand_core::OsRng,
+        )?)
+    }
     pub fn funding_request(&self) -> Result<FundingRequest, PayerError> {
         let record = self.record.as_ref().ok_or(PayerError::Backup)?;
         record.verify()?;

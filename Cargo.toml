@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tidvar-core", "crates/tidvar-seal", "crates/tidvar-chain", "crates/tidvar-payer", "crates/tidvar-payee"]
+members = ["crates/tidvar-core", "crates/tidvar-seal", "crates/tidvar-chain", "crates/tidvar-payer", "crates/tidvar-payee", "services/api"]
 resolver = "3"
 
 [workspace.package]
@@ -43,6 +43,9 @@ tonic = { version = "0.14", default-features = false, features = ["transport", "
 
 
 zip321 = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a" }
+
+pczt = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a", default-features = false, features = ["zcp-builder", "io-finalizer", "signer"] }
+rand_core_new = { package = "rand_core", version = "0.10" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

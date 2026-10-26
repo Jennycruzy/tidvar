@@ -1,0 +1,9 @@
+{
+  "name": "tidvar-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"check": "tsc --noEmit", "build": "tsc --noEmit && vite build"},
+  "dependencies": {"qrcode": "^1.5.4"},
+  "devDependencies": {"typescript": "^5.9.3", "vite": "^7.1.12"}
+}

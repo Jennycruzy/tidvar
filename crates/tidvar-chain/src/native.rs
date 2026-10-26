@@ -5,7 +5,7 @@ use crate::{
     transport,
 };
 use prost::Message;
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, io::Cursor, time::Duration};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use zcash_primitives::transaction::Transaction;
 use zcash_protocol::consensus::BranchId;
@@ -132,16 +132,18 @@ impl Client {
             })
             .await
             .map(|r| r.into_inner())
-            .map_err(|_| ChainError::Unavailable)
+            .map_err(|error| {
+                if error.code() == tonic::Code::NotFound {
+                    ChainError::TransactionMissing
+                } else {
+                    ChainError::Unavailable
+                }
+            })
     }
     pub async fn broadcast(&mut self, raw: Vec<u8>) -> Result<String, ChainError> {
         self.info().await?;
-        let transaction =
-            Transaction::read(raw.as_slice(), BranchId::Nu7).map_err(|_| ChainError::Message)?;
-        if transaction.consensus_branch_id() != BranchId::Nu7 {
-            return Err(ChainError::Network);
-        }
-        let txid = transaction.txid().to_string();
+        let tip = self.latest().await?;
+        let txid = validate_broadcast(&raw, tip.height)?;
         let result = self
             .inner
             .send_transaction(service::RawTransaction {
@@ -218,4 +220,23 @@ impl Client {
         }
         Ok(transport::successful(out))
     }
+}
+
+pub fn validate_broadcast(raw: &[u8], tip: u64) -> Result<String, ChainError> {
+    let mut cursor = Cursor::new(raw);
+    let transaction =
+        Transaction::read(&mut cursor, BranchId::Nu7).map_err(|_| ChainError::Message)?;
+    if cursor.position() != raw.len() as u64 {
+        return Err(ChainError::Message);
+    }
+    if transaction.consensus_branch_id() != BranchId::Nu7
+        || !transaction.version().valid_in_branch(BranchId::Nu7)
+    {
+        return Err(ChainError::Network);
+    }
+    let expiry = u32::from(transaction.expiry_height());
+    if expiry > 0 && tip >= u64::from(expiry) {
+        return Err(ChainError::Expired);
+    }
+    Ok(transaction.txid().to_string())
 }

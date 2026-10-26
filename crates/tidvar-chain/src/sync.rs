@@ -101,6 +101,19 @@ pub fn compact(value: &CompactOrchardAction) -> Result<CompactAction, ChainError
 }
 
 impl SyncState {
+    pub fn funding_notes(&self) -> Result<Vec<tidvar_core::iou::FundingNote>, ChainError> {
+        self.notes
+            .iter()
+            .filter(|note| !note.spent)
+            .map(|owned| {
+                let path = owned.witness.path().ok_or(ChainError::Tree)?;
+                Ok(tidvar_core::iou::FundingNote {
+                    note: owned.note,
+                    path: orchard::tree::MerklePath::from(path),
+                })
+            })
+            .collect()
+    }
     pub fn new(viewing_key: &[u8], before: TreeState) -> Result<Self, ChainError> {
         if before.network != "test" {
             return Err(ChainError::Network);

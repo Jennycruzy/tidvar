@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 base64.workspace = true
 blake2b_simd.workspace = true
@@ -21,6 +22,10 @@ orchard.workspace = true
 zcash_keys.workspace = true
 zcash_address.workspace = true
 zcash_protocol.workspace = true
+zcash_primitives.workspace = true
+pczt.workspace = true
+zcash_note_encryption.workspace = true
+rand_core_new.workspace = true
 
 [dev-dependencies]
 rand_core = { workspace = true, features = ["getrandom"] }

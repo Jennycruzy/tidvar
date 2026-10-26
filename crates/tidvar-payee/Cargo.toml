@@ -19,6 +19,17 @@ zcash_protocol.workspace = true
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 rusqlite = {version="0.37",features=["bundled"]}
+pczt = {workspace=true,features=["prover","tx-extractor"]}
+orchard = {workspace=true,features=["circuit"]}
+zcash_primitives.workspace = true
+
+[dev-dependencies]
+tidvar-chain = {path="../tidvar-chain"}
+tokio.workspace = true
+hex.workspace = true
+pczt.workspace = true
+zcash_note_encryption.workspace = true
+rand_core = {workspace=true,features=["getrandom"]}
 
 [lints]
 workspace = true

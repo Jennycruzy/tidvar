@@ -74,3 +74,55 @@ async fn actual_tip_compact_block_and_tree_are_consistent() -> Result<(), Box<dy
     );
     Ok(())
 }
+
+#[tokio::test]
+#[ignore = "Requires a supplied real testnet transaction"]
+async fn supplied_transaction_has_the_expected_hash_and_mining_height()
+-> Result<(), Box<dyn std::error::Error>> {
+    let txid = std::env::var("TIDVAR_TXID")?;
+    let mut client = Client::connect(TESTNET_SERVER).await?;
+    let tip = client.latest().await?;
+    println!("TESTNET live tip{}", tip.height);
+    let raw = client.transaction(&txid).await?;
+    let tx = zcash_primitives::transaction::Transaction::read(
+        raw.data.as_slice(),
+        zcash_protocol::consensus::BranchId::Nu7,
+    )?;
+    assert_eq!(tx.txid().to_string(), txid);
+    let tip = client.latest().await?;
+    println!(
+        "TESTNET transaction{} height{} tip{} bytes{}",
+        txid,
+        raw.height,
+        tip.height,
+        raw.data.len()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "Requires a supplied real transaction file"]
+async fn supplied_expired_transaction_cannot_be_mined_again()
+-> Result<(), Box<dyn std::error::Error>> {
+    let path = std::env::var("TIDVAR_RAW_TX")?;
+    let raw = std::fs::read(path)?;
+    let tx = zcash_primitives::transaction::Transaction::read(
+        raw.as_slice(),
+        zcash_protocol::consensus::BranchId::Nu7,
+    )?;
+    let expiry = u32::from(tx.expiry_height());
+    let mut client = Client::connect(TESTNET_SERVER).await?;
+    let tip = client.latest().await?;
+    assert!(expiry > 0 && u64::from(expiry) <= tip.height);
+    assert!(matches!(
+        tidvar_chain::native::validate_broadcast(&raw, tip.height),
+        Err(tidvar_chain::ChainError::Expired)
+    ));
+    println!(
+        "TESTNET original{} expired at{}; current tip{}",
+        tx.txid(),
+        expiry,
+        tip.height
+    );
+    Ok(())
+}

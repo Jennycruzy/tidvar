@@ -9,6 +9,10 @@ pub use zcash_client_backend::proto::{compact_formats, service};
 
 #[derive(Debug, Error)]
 pub enum ChainError {
+    #[error("The transaction has expired. Keep your tab and prepare a fresh transaction.")]
+    Expired,
+    #[error("The transaction was not found in the mempool or current chain.")]
+    TransactionMissing,
     #[error("We can't reach the Zcash server right now. Retrying.")]
     Unavailable,
     #[error("The Zcash server returned data for a different network.")]

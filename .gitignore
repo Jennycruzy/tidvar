@@ -11,3 +11,7 @@
 *.age
 
 /packages/*/dist/
+
+/web/public/pkg/
+
+/web/public/kit/

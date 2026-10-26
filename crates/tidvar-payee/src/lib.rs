@@ -5,6 +5,8 @@ pub mod store;
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
+    #[error("The payment proof failed verification. No payment was accepted.")]
+    Proof,
     #[error("The tab terms changed during setup. No money moved.")]
     Terms,
     #[error("The tab could not be saved. Do not send money yet.")]
@@ -16,3 +18,6 @@ pub enum PayeeError {
     #[error(transparent)]
     Seal(#[from] tidvar_seal::SealError),
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod proof;

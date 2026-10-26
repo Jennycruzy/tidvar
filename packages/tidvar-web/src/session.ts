@@ -8,6 +8,7 @@ export class Session {
   private payer?: Payer;
   private wasm?: Wasm;
   private key?: CryptoKey;
+  private saves: Promise<void> = Promise.resolve();
   async create(): Promise<string> {
     if (this.payer) throw new Error("A tab is already open in this page.");
     const wasm = this.wasm ??= await loadWasm();
@@ -19,7 +20,12 @@ export class Session {
     if (!this.payer) throw new Error("Recover your saved tab to continue.");
     return this.payer;
   }
-  async save(id: string): Promise<EncryptedBackup> {
+  save(id: string): Promise<EncryptedBackup> {
+    const operation = this.saves.then(() => this.saveNow(id));
+    this.saves = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+  private async saveNow(id: string): Promise<EncryptedBackup> {
     const payer = this.current();
     if (!this.key) throw new Error("The tab protection key is missing.");
     const state = payer.backup_plaintext();

@@ -11,7 +11,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo check --workspace --target wasm32-unknown-unknown --locked
+      - run: cargo check -p tidvar-core -p tidvar-seal -p tidvar-chain -p tidvar-payer -p tidvar-payee --target wasm32-unknown-unknown --locked
       - run: cargo clippy -p tidvar-payer --target wasm32-unknown-unknown --locked -- -D warnings
       - shell: python
         run: |
@@ -63,3 +63,5 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix packages/tidvar-web --ignore-scripts
       - run: npm run check --prefix packages/tidvar-web
+      - run: npm ci --prefix web --ignore-scripts
+      - run: npm run check --prefix web

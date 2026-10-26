@@ -1,0 +1,20 @@
+[Unit]
+Description=Tidvar testnet API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/tidvar
+EnvironmentFile=/root/tidvar-private/api-testnet.env
+ExecStart=/root/tidvar/target/debug/tidvar-api
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data /root/tidvar-private/keys
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
