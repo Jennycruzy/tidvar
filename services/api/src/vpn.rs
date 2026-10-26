@@ -67,7 +67,7 @@ pub async fn handle(
     let action: Action =
         serde_json::from_value(request.message.body.clone()).map_err(|_| Failure::bad())?;
     let tab = request.message.tab_id.0;
-    let body = match action_body(&mut store, &tab, action) {
+    let body = match action_body(&mut store, &tab, action, app.bandwidth) {
         Ok(body) => body,
         Err(error)
             if error.0 == StatusCode::BAD_REQUEST || error.1.starts_with("The VPN is full") =>
@@ -83,7 +83,16 @@ fn action_body(
     store: &mut tidvar_payee::store::Store,
     tab: &[u8; 32],
     action: Action,
+    limits: tidvar_payee::usage::Limits,
 ) -> Result<serde_json::Value, Failure> {
+    if !matches!(&action, Action::Pause) {
+        let usage = store.usage(tab, now()?, limits).map_err(failure)?;
+        if let Some(limit) = usage.limit {
+            return Ok(
+                serde_json::json!({"step":"vpn_refused","code":limit,"error":limit.message(),"usage":usage}),
+            );
+        }
+    }
     Ok(match action {
         Action::Peer { public_key } => {
             let key: [u8; 32] = STANDARD

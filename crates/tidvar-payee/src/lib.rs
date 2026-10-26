@@ -5,6 +5,8 @@ pub mod store;
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
+    #[error("The VPN usage settings or counters could not be verified. Your prepaid time is kept.")]
+    Usage,
     #[error("The VPN is full. Keep your prepaid time and try again later.")]
     Capacity,
     #[error("This request does not follow the saved exchange. Retry the same request.")]
@@ -36,3 +38,6 @@ pub mod proof;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod payments;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod usage;

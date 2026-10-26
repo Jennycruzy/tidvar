@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tidvar_core::params;
-use tidvar_payee::store::Store;
+use tidvar_payee::{store::Store, usage::Limits};
 use wireguard_control::{Backend, Device, DeviceUpdate, InterfaceName, Key, PeerConfigBuilder};
 use zeroize::Zeroizing;
 
@@ -107,6 +107,7 @@ fn public_configuration(public: &Key) -> Result<()> {
     Ok(())
 }
 fn run() -> Result<()> {
+    let limits = Limits::from_environment()?;
     let name: InterfaceName = INTERFACE.parse()?;
     let secret = private_key()?;
     let mut private = Key(*secret);
@@ -152,7 +153,8 @@ fn run() -> Result<()> {
         if registered.len() > 50 {
             bail!("The VPN connection limit was exceeded.");
         }
-        let mut current: HashSet<[u8; 32]> = device(&name)?
+        let observed = device(&name)?;
+        let mut current: HashSet<[u8; 32]> = observed
             .peers
             .iter()
             .map(|peer| peer.config.public_key.0)
@@ -164,7 +166,29 @@ fn run() -> Result<()> {
         }
         let mut admitted = false;
         for peer in registered {
-            let balance = store.balance(&peer.tab_id, now()?)?;
+            let sampled = now()?;
+            let usage = if let Some(actual) = observed
+                .peers
+                .iter()
+                .find(|actual| actual.config.public_key.0 == peer.public_key)
+            {
+                store.record_transfer(
+                    &peer.tab_id,
+                    actual.stats.rx_bytes,
+                    actual.stats.tx_bytes,
+                    sampled,
+                    limits,
+                )?
+            } else {
+                store.usage(&peer.tab_id, sampled, limits)?
+            };
+            let mut balance = store.balance(&peer.tab_id, sampled)?;
+            if let Some(limit) = usage.limit
+                && !balance.paused
+            {
+                balance = store.pause_vpn(&peer.tab_id, sampled)?;
+                eprintln!("VPN paused for {} at {}.", limit.code(), sampled);
+            }
             if balance.running && !current.contains(&peer.public_key) {
                 store.recover_vpn(&peer.tab_id)?;
                 continue;
@@ -178,6 +202,7 @@ fn run() -> Result<()> {
                     traffic::configure(&peer)?;
                     shaped.insert(peer.slot);
                 }
+                store.reset_transfer_counter(&peer.tab_id, now()?)?;
                 DeviceUpdate::new()
                     .add_peer(
                         PeerConfigBuilder::new(&Key(peer.public_key))

@@ -113,6 +113,52 @@ fn separate_service_saves_only_its_own_share_after_both_signatures()
         let reply = store.save_reply(&next, serde_json::to_value(balance)?)?;
         p.accept_reply(serde_json::from_slice(&reply)?)?;
         assert!(store.cached_reply(&request).is_err());
+        let limits = tidvar_payee::usage::Limits::default();
+        let usage = store.record_transfer(&id, 4096, 8192, now, limits)?;
+        assert_eq!(usage.daily_bytes, 12288);
+        assert_eq!(
+            store
+                .record_transfer(&id, 4096, 8192, now, limits)?
+                .daily_bytes,
+            12288
+        );
+        store.reset_transfer_counter(&id, now)?;
+        assert_eq!(
+            store
+                .record_transfer(&id, 256, 512, now + 1, limits)?
+                .daily_bytes,
+            13056
+        );
+        let next_midnight = (now / 86_400_000 + 1) * 86_400_000;
+        assert_eq!(store.usage(&id, next_midnight, limits)?.daily_bytes, 0);
+        assert_eq!(store.usage(&id, now, limits)?.daily_bytes, 13056);
+        assert_eq!(
+            store
+                .usage(
+                    &id,
+                    now,
+                    tidvar_payee::usage::Limits {
+                        daily: 13056,
+                        monthly: limits.monthly
+                    }
+                )?
+                .limit,
+            Some(tidvar_payee::usage::Limit::Daily)
+        );
+        assert_eq!(
+            store
+                .usage(
+                    &id,
+                    now,
+                    tidvar_payee::usage::Limits {
+                        daily: limits.daily,
+                        monthly: 13056
+                    }
+                )?
+                .limit,
+            Some(tidvar_payee::usage::Limit::Monthly)
+        );
+
         let mut wireguard = [0; 32];
         OsRng.fill_bytes(&mut wireguard);
         let peer = store.register_peer(&id, wireguard)?;

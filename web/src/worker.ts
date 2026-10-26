@@ -37,6 +37,8 @@ host.onmessage = async event => {
     else throw new Error("This step is not available.");
     host.postMessage({id, result});
   } catch (error) {
-    host.postMessage({id: event.data.id, error: error instanceof Error ? error.message : "This step could not finish. Keep your backup and retry."});
+    let snapshot: unknown;
+    try {if(tab)snapshot=meter();} catch {}
+    host.postMessage({id:event.data.id,meter:snapshot,error:error instanceof Error ? error.message : "This step could not finish. Keep your backup and retry."});
   } finally {busy = false;}
 };

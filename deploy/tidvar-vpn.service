@@ -4,6 +4,7 @@ After=network-online.target
 Wants=network-online.target tidvar-dns.service
 
 [Service]
+EnvironmentFile=-/root/tidvar-private/vpn-limits.env
 Type=notify
 NotifyAccess=all
 WorkingDirectory=/root/tidvar

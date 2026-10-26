@@ -33,6 +33,7 @@ use zeroize::Zeroizing;
 
 #[derive(Clone)]
 pub struct App {
+    bandwidth: tidvar_payee::usage::Limits,
     offer: Arc<Offer>,
     identity: Arc<SigningKey<SpendAuth>>,
     chain: Arc<AsyncMutex<Client>>,
@@ -230,6 +231,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("TIDVAR_WEB_ROOT").unwrap_or_else(|_| "/root/tidvar/web/dist".to_owned()),
     );
     let app = App {
+        bandwidth: tidvar_payee::usage::Limits::from_environment()?,
         offer: Arc::new(published),
         identity: Arc::new(identity),
         chain: Arc::new(AsyncMutex::new(chain)),

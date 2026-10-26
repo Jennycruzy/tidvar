@@ -8,6 +8,7 @@ let sequence = 0;
 const waiting = new Map<number, {resolve(value: unknown): void; reject(error: Error): void}>();
 const progress = element("progress");const error = element("error");
 worker.onmessage = event => {
+  if(event.data.meter)showMeter(event.data.meter as Meter);
   if (event.data.progress) {progress.textContent = event.data.progress; return;}
   if (event.data.chain) {
     const {height, value} = event.data.chain as {height: number; value: number};
@@ -154,7 +155,7 @@ element<HTMLButtonElement>("vpn-setup").onclick = async () => {
     const key = await wireguardKey(id);
     const result = await call("vpn", {step: "vpn_peer", public_key: key.publicKey}) as {reply: {address: string; dns: string; server_key: string; endpoint: string}; meter: Meter};
     const reply = result.reply;
-    const config = `[Interface]\nPrivateKey = ${key.privateKey}\nAddress = ${reply.address}\nDNS = ${reply.dns}\n\n[Peer]\nPublicKey = ${reply.server_key}\nAllowedIPs = 0.0.0.0/0\nEndpoint = ${reply.endpoint}\nPersistentKeepalive = 25\n`;
+    const config = `[Interface]\nPrivateKey = ${key.privateKey}\nAddress = ${reply.address}\nDNS = ${reply.dns}\n\n[Peer]\nPublicKey = ${reply.server_key}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = ${reply.endpoint}\nPersistentKeepalive = 25\n`;
     await toCanvas(element<HTMLCanvasElement>("vpn-qr"), config, {width: 280, margin: 2});
     if (configUrl) URL.revokeObjectURL(configUrl);
     configUrl = URL.createObjectURL(new Blob([config], {type: "text/plain"}));

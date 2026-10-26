@@ -57,6 +57,9 @@ export class Tab {
     await this.opening.session.save(this.id);
     const reply=await this.deliver();
     if(!reply || reply.step!=="nonces")throw new Error("The service did not return fresh signing values.");
+    const usage=reply.usage as {limit?:string | null} | undefined;
+    if(usage?.limit==="DATA_LIMIT")throw new Error("You've used today's data allowance. It resets at 00:00 UTC; your prepaid time is kept.");
+    if(usage?.limit==="HOST_LIMIT")throw new Error("The VPN has reached this month's data limit. Your prepaid time is kept; close the tab to get it back.");
     return reply;
   }
   async refresh(hidden: boolean, progress: (height:bigint,value:bigint)=>void): Promise<void> {

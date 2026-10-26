@@ -14,7 +14,7 @@ use zcash_protocol::consensus::NetworkType;
 use zeroize::Zeroizing;
 
 pub struct Store {
-    connection: Connection,
+    pub(crate) connection: Connection,
 }
 impl Store {
     pub fn open(path: &Path) -> Result<Self, PayeeError> {
@@ -82,6 +82,22 @@ impl Store {
                 slot INTEGER PRIMARY KEY AUTOINCREMENT CHECK(slot>0 AND slot<65534),
                 tab_id BLOB NOT NULL UNIQUE REFERENCES tabs(id),
                 public_key BLOB NOT NULL UNIQUE CHECK(length(public_key)=32)
+            );
+            CREATE TABLE IF NOT EXISTS transfer_counters (
+                tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
+                rx INTEGER NOT NULL CHECK(rx>=0),
+                tx INTEGER NOT NULL CHECK(tx>=0),
+                sampled_ms INTEGER NOT NULL CHECK(sampled_ms>=0)
+            );
+            CREATE TABLE IF NOT EXISTS daily_traffic (
+                tab_id BLOB NOT NULL REFERENCES tabs(id),
+                day INTEGER NOT NULL,
+                bytes INTEGER NOT NULL CHECK(bytes>=0),
+                PRIMARY KEY(tab_id,day)
+            );
+            CREATE TABLE IF NOT EXISTS monthly_traffic (
+                month TEXT PRIMARY KEY,
+                bytes INTEGER NOT NULL CHECK(bytes>=0)
             );",
             )
             .map_err(|_| PayeeError::Storage)?;

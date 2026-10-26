@@ -62,3 +62,14 @@ The browser registers its WireGuard public key and pauses or resumes with `POST 
 The network setup installs an HTB root on the WireGuard interface. Before admitting a peer, the controller creates a 20 Mbit/s egress class for its destination address and a 20 Mbit/s ingress policer for its source address. Classes use the allocated private address, never a tab identifier.
 
 The controller keeps the installed classes for a peer across Pause and Resume. It admits at most one new key per polling cycle so a burst of admissions does not hold up payment-time removals. If a traffic-control command fails, that key is not admitted.
+
+
+## Persistent data allowances
+
+The controller samples the kernel WireGuard receive and transmit counters every 100 ms. It stores the counter baseline, per-tab UTC-day total and shared UTC-calendar-month total through the existing SQLite connection. Repeated snapshots do not add bytes again. A peer restart resets its baseline, not the accumulated allowances.
+
+The default per-tab allowance is 5,000,000,000 bytes per UTC day. The server allowance is 6,000,000,000,000 bytes per UTC month across its WireGuard peers. When a sampled total reaches its allowance, the controller pauses billing, removes the peer and preserves prepaid credit. Resume is refused while the allowance remains exhausted. New UTC periods have separate buckets; historical totals are retained.
+
+The authenticated balance reply includes the caller's daily usage and an optional DATA_LIMIT or HOST_LIMIT reason. It does not disclose other tabs or their individual counters.
+
+For testnet operation, both units optionally read the same private vpn-limits.env file. TIDVAR_DAILY_BYTES and TIDVAR_MONTHLY_BYTES may lower the respective allowances for a bounded real-traffic check; zero values and values above the normal allowances are rejected. Remove those overrides and restart both services before inviting a phone. Keep the actual measured transfer totals across such checks.

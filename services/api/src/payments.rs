@@ -168,7 +168,8 @@ async fn execute(app: App, request: Authenticated, iou_route: bool) -> Result<Re
                 let balance=store.balance(&id,now()?).map_err(failure)?;
                 if balance.closing {return Err(Failure(StatusCode::GONE,"This tab is closing. Keep its transaction and your backup."));}
                 let commitments=store.available_nonces(&id,&mut OsRng).map_err(failure)?;
-                Ok::<_,Failure>(serde_json::json!({"step":"nonces","commitments":commitments,"balance":balance,"height":state.height}))
+                let usage=store.usage(&id,now()?,app.bandwidth).map_err(failure)?;
+                Ok::<_,Failure>(serde_json::json!({"step":"nonces","commitments":commitments,"balance":balance,"height":state.height,"usage":usage}))
             }).await.map_err(|_|Failure::internal())??
         }
         Action::Iou { payment } => match accept(app.clone(), tab, state, client, payment).await {
