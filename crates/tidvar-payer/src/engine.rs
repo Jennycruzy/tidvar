@@ -728,6 +728,23 @@ impl Payer {
                 authorizer.resume(now_ms).map_err(|_| PayerError::Backup)?;
             }
         }
+        let sent = pending
+            .message
+            .body
+            .get("step")
+            .and_then(|value| value.as_str());
+        match (
+            sent,
+            reply.body.get("step").and_then(|value| value.as_str()),
+        ) {
+            (Some("vpn_pause"), Some("vpn_paused")) => {
+                authorizer.pause(now_ms).map_err(|_| PayerError::Backup)?;
+            }
+            (Some("vpn_peer"), Some("vpn_peer")) | (Some("vpn_resume"), Some("vpn_resumed")) => {
+                authorizer.unpause(now_ms).map_err(|_| PayerError::Backup)?;
+            }
+            _ => {}
+        }
         let body = self.accept_reply(reply)?;
         self.authorizer = authorizer;
         Ok(body)

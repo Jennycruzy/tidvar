@@ -67,7 +67,24 @@ pub async fn handle(
     let action: Action =
         serde_json::from_value(request.message.body.clone()).map_err(|_| Failure::bad())?;
     let tab = request.message.tab_id.0;
-    let body = match action {
+    let body = match action_body(&mut store, &tab, action) {
+        Ok(body) => body,
+        Err(error)
+            if error.0 == StatusCode::BAD_REQUEST || error.1.starts_with("The VPN is full") =>
+        {
+            serde_json::json!({"step":"vpn_refused","error":error.1})
+        }
+        Err(error) => return Err(error),
+    };
+    let reply = store.save_reply(&request, body).map_err(failure)?;
+    Ok(bytes_response("application/json", reply))
+}
+fn action_body(
+    store: &mut tidvar_payee::store::Store,
+    tab: &[u8; 32],
+    action: Action,
+) -> Result<serde_json::Value, Failure> {
+    Ok(match action {
         Action::Peer { public_key } => {
             let key: [u8; 32] = STANDARD
                 .decode(public_key)
@@ -75,8 +92,8 @@ pub async fn handle(
                 .try_into()
                 .map_err(|_| Failure::bad())?;
             let server = server()?;
-            let peer = store.register_peer(&tab, key).map_err(failure)?;
-            let balance = store.request_vpn_resume(&tab, now()?).map_err(failure)?;
+            let peer = store.register_peer(tab, key).map_err(failure)?;
+            let balance = store.request_vpn_resume(tab, now()?).map_err(failure)?;
             serde_json::json!({
                 "step":"vpn_peer",
                 "address":format!("{}/32",peer.address().map_err(failure)?),
@@ -87,18 +104,13 @@ pub async fn handle(
             })
         }
         Action::Pause => {
-            let balance = store.pause_vpn(&tab, now()?).map_err(failure)?;
+            let balance = store.pause_vpn(tab, now()?).map_err(failure)?;
             serde_json::json!({"step":"vpn_paused","balance":balance})
         }
         Action::Resume => {
-            store
-                .load(&tab)
-                .map_err(failure)?
-                .ok_or_else(Failure::bad)?;
-            let balance = store.request_vpn_resume(&tab, now()?).map_err(failure)?;
+            store.load(tab).map_err(failure)?.ok_or_else(Failure::bad)?;
+            let balance = store.request_vpn_resume(tab, now()?).map_err(failure)?;
             serde_json::json!({"step":"vpn_resumed","balance":balance})
         }
-    };
-    let reply = store.save_reply(&request, body).map_err(failure)?;
-    Ok(bytes_response("application/json", reply))
+    })
 }

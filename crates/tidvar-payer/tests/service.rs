@@ -113,6 +113,33 @@ fn separate_service_saves_only_its_own_share_after_both_signatures()
         let reply = store.save_reply(&next, serde_json::to_value(balance)?)?;
         p.accept_reply(serde_json::from_slice(&reply)?)?;
         assert!(store.cached_reply(&request).is_err());
+        let mut wireguard = [0; 32];
+        OsRng.fill_bytes(&mut wireguard);
+        let peer = store.register_peer(&id, wireguard)?;
+        assert_eq!(peer.address()?, std::net::Ipv4Addr::new(10, 77, 0, 2));
+        assert_eq!(store.register_peer(&id, wireguard)?.slot, peer.slot);
+        assert!(store.register_peer(&id, [7; 32]).is_err());
+        assert!(store.register_peer(&[9; 32], [8; 32]).is_err());
+        assert_eq!(store.peers()?.len(), 1);
+        let pause = p.prepare_request(&root, serde_json::json!({"step":"vpn_pause"}))?;
+        let balance = store.pause_vpn(&id, now + 1)?;
+        let reply = store.save_reply(
+            &pause,
+            serde_json::json!({"step":"vpn_paused","balance":balance}),
+        )?;
+        p.accept_reply_at(serde_json::from_slice(&reply)?, now + 1)?;
+        assert!(p.authorization_balance(now + 2)?.paused);
+        assert!(store.balance(&id, now + 2)?.paused);
+        let resume = p.prepare_request(&root, serde_json::json!({"step":"vpn_resume"}))?;
+        let balance = store.request_vpn_resume(&id, now + 3)?;
+        assert!(!balance.paused && !balance.running);
+        let reply = store.save_reply(
+            &resume,
+            serde_json::json!({"step":"vpn_resumed","balance":balance}),
+        )?;
+        p.accept_reply_at(serde_json::from_slice(&reply)?, now + 3)?;
+        assert!(!p.authorization_balance(now + 4)?.paused);
+        assert!(store.resume_vpn(&id, now + 4).is_err());
         assert_eq!(
             std::fs::metadata(&path)?.permissions().mode() & 0o777,
             0o600

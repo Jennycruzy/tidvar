@@ -23,6 +23,8 @@ export class Tab {
       response=await fetch("/v1/tabs/"+this.id+"/nonces",{...options,headers:{"tidvar-request":JSON.stringify(pending)}});
     }else if(step==="iou"){
       response=await fetch("/v1/tabs/"+this.id+"/iou",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
+    }else if(typeof step==="string" && step.startsWith("vpn_")){
+      response=await fetch("/v1/tabs/"+this.id+"/vpn",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else{throw new Error("This saved request cannot be sent by the payment loop.");}
     if(!response.headers.get("content-type")?.includes("application/json"))throw new Error("The connection was interrupted. Keep this page open; the same request will be retried.");
     const text=await response.text();
@@ -35,9 +37,20 @@ export class Tab {
     if(reply.step==="refused")throw new Error(typeof reply.error==="string"?reply.error:"The service refused this payment. Keep your backup and retry.");
     if(reply.step==="nonces"){this.pool=reply.commitments as Commitment[];this.balance=reply.balance as Balance;}
     if(reply.step==="accepted")this.balance=(reply.receipt as {balance:Balance}).balance;
+    if(typeof reply.step==="string" && reply.step.startsWith("vpn_") && reply.balance)this.balance=reply.balance as Balance;
     return reply;
   }
   async retry(): Promise<Record<string,unknown> | undefined> {return await this.deliver();}
+  serviceBalance(): Balance | undefined {return this.balance;}
+  async vpn(body: {step: "vpn_peer"; public_key: string} | {step: "vpn_pause"} | {step: "vpn_resume"}): Promise<Record<string,unknown>> {
+    await this.deliver();
+    this.opening.session.current().prepare_request(JSON.stringify(body));
+    await this.opening.session.save(this.id);
+    const reply=await this.deliver();
+    if(reply?.step==="vpn_refused")throw new Error(typeof reply.error==="string"?reply.error:"The VPN request was refused.");
+    if(!reply || reply.step===undefined || !String(reply.step).startsWith("vpn_"))throw new Error("The VPN request was not confirmed. Keep this page open and retry.");
+    return reply;
+  }
   async nonces(): Promise<Record<string,unknown>> {
     await this.deliver();
     this.opening.session.current().prepare_request(JSON.stringify({step:"nonces"}));
