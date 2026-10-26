@@ -266,7 +266,7 @@ impl BrowserPayer {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, serde::Deserialize)]
 struct Prepared {
     #[serde(with = "tidvar_core::encoding::bytes")]
     pczt: Vec<u8>,
@@ -294,5 +294,34 @@ impl BrowserPayer {
             anchor_height: height,
             cooperative,
         })
+    }
+}
+
+#[wasm_bindgen]
+impl BrowserPayer {
+    pub fn sign_transaction(
+        &mut self,
+        prepared: &str,
+        services: &str,
+        tree: &[u8],
+    ) -> Result<String, JsValue> {
+        let prepared: Prepared = parse(prepared)?;
+        let services = parse(services)?;
+        let tree = tidvar_chain::transport::unary(tree).map_err(error)?;
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .sign_transaction(
+                    &prepared.pczt,
+                    prepared.amount,
+                    prepared.anchor_height,
+                    prepared.cooperative,
+                    tree,
+                    services,
+                )
+                .map_err(error)?,
+        )
     }
 }

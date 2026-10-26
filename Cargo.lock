@@ -3309,6 +3309,7 @@ name = "tidvar-payer"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "pczt",
  "rand_core 0.6.4",
  "reddsa 0.5.2",
  "serde",

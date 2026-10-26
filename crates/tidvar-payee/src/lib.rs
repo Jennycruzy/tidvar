@@ -5,6 +5,10 @@ pub mod store;
 use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
+    #[error(transparent)]
+    Signing(#[from] tidvar_core::frost::SigningError),
+    #[error("This signing value has already been assigned to another transaction.")]
+    Nonce,
     #[error("The payment proof failed verification. No payment was accepted.")]
     Proof,
     #[error("The tab terms changed during setup. No money moved.")]

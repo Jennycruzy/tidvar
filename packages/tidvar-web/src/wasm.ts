@@ -11,6 +11,7 @@ export interface Payer {
   signed_record(): string;
   funding_request(): string;
   prepare_transaction(amount: bigint, cooperative: boolean): string;
+  sign_transaction(prepared: string, services: string, tree: Uint8Array): string;
   backup_plaintext(): Uint8Array;
   start_sync(reply: Uint8Array): void;
   apply_blocks(reply: Uint8Array): void;

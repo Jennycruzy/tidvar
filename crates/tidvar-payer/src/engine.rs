@@ -42,6 +42,14 @@ pub struct FundingRequest {
     pub uri: String,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SignedTransaction {
+    #[serde(with = "tidvar_core::encoding::fixed32")]
+    request: [u8; 32],
+    pub messages: Vec<tidvar_core::frost::Message>,
+    pub shares: Vec<tidvar_core::frost::Share>,
+}
+
 pub struct Setup {
     inner: FirstRound,
 }
@@ -62,6 +70,7 @@ pub struct Payer {
     sync: Option<SyncState>,
     consumed: Vec<[u8; 32]>,
     record: Option<tidvar_core::record::SignedRecord>,
+    pending: Option<SignedTransaction>,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -83,6 +92,7 @@ struct Backup {
     sync: Option<Snapshot>,
     consumed: Vec<[u8; 32]>,
     record: Option<tidvar_core::record::SignedRecord>,
+    pending: Option<SignedTransaction>,
     #[serde(with = "tidvar_core::encoding::fixed32")]
     owner: [u8; 32],
 }
@@ -142,10 +152,94 @@ impl PendingPayer {
             sync: None,
             consumed: Vec::new(),
             record: None,
+            pending: None,
         })
     }
 }
 impl Payer {
+    pub fn sign_transaction(
+        &mut self,
+        raw: &[u8],
+        amount: u64,
+        anchor_height: u64,
+        cooperative: bool,
+        tree: tidvar_chain::service::TreeState,
+        services: Vec<tidvar_core::frost::Commitment>,
+    ) -> Result<SignedTransaction, PayerError> {
+        use tidvar_core::{frost, iou};
+        if tree.height != anchor_height {
+            return Err(PayerError::Backup);
+        }
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
+        if anchor_height > sync.height {
+            return Err(PayerError::Backup);
+        }
+        let anchor =
+            tidvar_chain::sync::SyncState::new(&self.keys.public.viewing_key, tree)?.root();
+        let pczt = pczt::Pczt::parse(raw).map_err(|_| PayerError::Backup)?;
+        let checked = iou::check(
+            pczt,
+            record,
+            &sync.funding_notes()?,
+            tidvar_core::params::Amount::try_from(amount).map_err(|_| PayerError::Backup)?,
+            iou::TransactionContext {
+                target: u32::try_from(anchor_height)
+                    .map_err(|_| PayerError::Backup)?
+                    .checked_add(1)
+                    .ok_or(PayerError::Backup)?,
+                kind: if cooperative {
+                    iou::Kind::Cooperative
+                } else {
+                    iou::Kind::Payment
+                },
+                anchor,
+            },
+            &mut rand_core::OsRng,
+        )?;
+        if services.len() != checked.spends.len() {
+            return Err(PayerError::Backup);
+        }
+        for service in &services {
+            service.verify().map_err(|_| PayerError::Backup)?;
+        }
+        let encoded = serde_json::to_vec(&services).map_err(|_| PayerError::Backup)?;
+        let request = encoding::hash(
+            b"TidvarPayReq",
+            &encoding::encode_bytes(&[raw, &encoded]).map_err(|_| PayerError::Backup)?,
+        )
+        .map_err(|_| PayerError::Backup)?;
+        if let Some(pending) = &self.pending
+            && pending.request == request
+        {
+            return Ok(pending.clone());
+        }
+        let mut messages = Vec::new();
+        let mut shares = Vec::new();
+        for (spend, service) in checked.spends.iter().zip(services) {
+            self.consume_commitment(&service.data)?;
+            let nonce = frost::Nonce::generate(&self.keys, &mut rand_core::OsRng)
+                .map_err(|_| PayerError::Backup)?;
+            let message = frost::Message {
+                sighash: checked.sighash,
+                alpha: spend.alpha,
+                payer: nonce.public().clone(),
+                service,
+            };
+            let share = nonce
+                .sign(&self.keys, &message)
+                .map_err(|_| PayerError::Backup)?;
+            messages.push(message);
+            shares.push(share);
+        }
+        let signed = SignedTransaction {
+            request,
+            messages,
+            shares,
+        };
+        self.pending = Some(signed.clone());
+        Ok(signed)
+    }
     pub fn transaction(
         &self,
         amount: u64,
@@ -301,6 +395,7 @@ impl Payer {
             sync: self.sync.as_ref().map(SyncState::snapshot).transpose()?,
             consumed: self.consumed.clone(),
             record: self.record.clone(),
+            pending: self.pending.clone(),
             owner: reddsa::VerificationKey::from(&record_key).into(),
         };
         Ok(Zeroizing::new(
@@ -351,6 +446,7 @@ impl Payer {
             sync,
             consumed: backup.consumed,
             record: None,
+            pending: backup.pending,
         };
         if let Some(record) = backup.record {
             record.verify()?;
