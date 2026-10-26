@@ -1,8 +1,12 @@
 Tidvar: a VPN you pay for by the second with private Zcash, off-chain.
 
-Open a tab with one shielded payment. Your browser then pays a fraction of a cent every 10 seconds
-off-chain, instantly and far below Zcash's own fee; stop paying and the VPN cuts off. Close the tab and what
-you didn't use comes back to you: hundreds of payments, two ordinary private transactions on chain.
+**Each payment is smaller than Zcash's own network fee, and the service never holds your money.**
+
+Open a tab with one shielded payment into a lock that needs both your key and the service's. Your browser
+then pays 1 zatoshi per 6 seconds of VPN, signed every 10 seconds, off-chain and instantly. Stop paying and
+the VPN cuts off within about 27 seconds. Close the tab and whatever you didn't use comes back to you:
+hundreds of payments, two ordinary private transactions on chain. If the service disappears, a time-sealed
+refund returns your money without it.
 
 **TESTNET ONLY.** This build accepts testnet TAZ. Do not send mainnet ZEC.
 
