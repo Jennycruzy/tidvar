@@ -55,3 +55,10 @@ After a restart no tab is running and no time is counted until the controller ad
 `tidvar-dns.service` runs unbound on 10.77.0.1 with query logging off and DNSSEC validation. Install its configuration with `install -m 644 deploy/unbound.conf /etc/unbound/tidvar.conf`; the distribution AppArmor profile only allows unbound to read under `/etc/unbound`. Disable the distribution `unbound.service` so it does not compete with the system resolver.
 
 The browser registers its WireGuard public key and pauses or resumes with `POST /v1/tabs/{id}/vpn`, using the same authenticated request format as payments, with body `step` set to `vpn_peer` (with `public_key` in base64), `vpn_pause` or `vpn_resume`. The `vpn_peer` reply carries the tunnel address, DNS server, server key and endpoint for the WireGuard configuration.
+
+
+## Peer bandwidth
+
+The network setup installs an HTB root on the WireGuard interface. Before admitting a peer, the controller creates a 20 Mbit/s egress class for its destination address and a 20 Mbit/s ingress policer for its source address. Classes use the allocated private address, never a tab identifier.
+
+The controller keeps the installed classes for a peer across Pause and Resume. It admits at most one new key per polling cycle so a burst of admissions does not hold up payment-time removals. If a traffic-control command fails, that key is not admitted.

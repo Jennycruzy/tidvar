@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+mod traffic;
 use anyhow::{Context, Result, bail};
 use std::{
     collections::HashSet,
@@ -144,6 +145,7 @@ fn run() -> Result<()> {
         }
     }
     eprintln!("Tidvar TESTNET VPN controller ready.");
+    let mut shaped = HashSet::new();
     loop {
         let cycle = Instant::now();
         let registered = store.peers()?;
@@ -160,6 +162,7 @@ fn run() -> Result<()> {
             remove(&name, key)?;
             current.remove(&key);
         }
+        let mut admitted = false;
         for peer in registered {
             let balance = store.balance(&peer.tab_id, now()?)?;
             if balance.running && !current.contains(&peer.public_key) {
@@ -169,8 +172,12 @@ fn run() -> Result<()> {
             let allowed = !balance.paused
                 && !balance.closing
                 && (balance.running || params::can_start_vpn(balance.paid, balance.used));
-            if allowed && !current.contains(&peer.public_key) && current.len() < 50 {
+            if allowed && !current.contains(&peer.public_key) && current.len() < 50 && !admitted {
                 let started = Instant::now();
+                if !shaped.contains(&peer.slot) {
+                    traffic::configure(&peer)?;
+                    shaped.insert(peer.slot);
+                }
                 DeviceUpdate::new()
                     .add_peer(
                         PeerConfigBuilder::new(&Key(peer.public_key))
@@ -184,6 +191,7 @@ fn run() -> Result<()> {
                     return Err(error.into());
                 }
                 current.insert(peer.public_key);
+                admitted = true;
                 eprintln!(
                     "VPN connected at {} in {}us.",
                     now()?,
