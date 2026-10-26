@@ -44,6 +44,7 @@ jobs:
         run: |
           import pathlib, tomllib
           allowed = set("pczt zcash_primitives zcash_protocol zcash_keys zcash_address zcash_client_backend orchard zcash_note_encryption incrementalmerkletree shardtree zip32 zip321 reddsa frost-core frost-rerandomized pasta_curves group ff blake2b_simd chacha20 rand_core rand_chacha getrandom tlock drand_core ark-bls12-381 ark-ec ark-ff ark-serialize sha2 age zeroize tokio axum tower tonic tonic-web-wasm-client prost reqwest serde serde_json base64 hex thiserror anyhow tracing clap wasm-bindgen js-sys web-sys rusqlite wireguard-control proptest libfuzzer-sys insta".split())
+          workspace = tomllib.loads(pathlib.Path("Cargo.toml").read_text()).get("workspace", {}).get("dependencies", {})
           for path in [pathlib.Path("Cargo.toml"), *pathlib.Path("crates").glob("*/Cargo.toml"), *pathlib.Path("services").glob("*/Cargo.toml")]:
               value = tomllib.loads(path.read_text())
               sections = [value, value.get("workspace", {})]
@@ -51,7 +52,11 @@ jobs:
               for section in sections:
                   for kind in ("dependencies", "dev-dependencies", "build-dependencies"):
                       for name, options in section.get(kind, {}).items():
-                          package = options.get("package", name) if isinstance(options, dict) else name
+                          resolved = options
+                          if isinstance(options, dict) and options.get("workspace"):
+                              assert name in workspace, (str(path), name)
+                              resolved = workspace[name]
+                          package = resolved.get("package", name) if isinstance(resolved, dict) else name
                           assert package in allowed or package.startswith("tidvar-") or package.startswith("netlink-"), (str(path), package)
 
   web:
