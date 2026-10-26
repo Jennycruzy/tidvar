@@ -50,7 +50,7 @@ A loopback SSH forward is useful for an operator browser, but it is not a device
 
 `tidvar-vpn.service` creates the kernel WireGuard interface `tidvar` (10.77.0.1/16, UDP 51820), loads `deploy/vpn.nft` and adds the ufw rules in `deploy/vpn-network.sh`. It checks every registered key ten times a second: a key is admitted when the tab has at least 20 seconds of unused paid time and is removed 5 seconds after paid time ends, on pause, or on close. Peers are known only by their WireGuard public key; the tab identifier is not written to WireGuard. At most 50 keys are registered.
 
-After a restart every tab starts paused, so time is never counted for a browser that is not present. The browser resumes with an authenticated `vpn_resume` request.
+After a restart no tab is running and no time is counted until the controller admits it again; a tab with at least 20 seconds of unused paid time is re-admitted, and a tab the payer paused stays paused until an authenticated `vpn_resume` request. The service database waits up to 2 seconds for a write lock shared with the API.
 
 `tidvar-dns.service` runs unbound on 10.77.0.1 with query logging off and DNSSEC validation. Install its configuration with `install -m 644 deploy/unbound.conf /etc/unbound/tidvar.conf`; the distribution AppArmor profile only allows unbound to read under `/etc/unbound`. Disable the distribution `unbound.service` so it does not compete with the system resolver.
 

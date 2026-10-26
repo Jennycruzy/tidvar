@@ -1,6 +1,8 @@
 use crate::params::{self, Amount, AmountError};
 use serde::{Deserialize, Serialize};
 
+pub const LOCK_WAIT_MS: u64 = 2500;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Active {
@@ -41,9 +43,22 @@ impl Default for Ledger {
     }
 }
 impl Ledger {
+    /// A reading taken just before waiting for the service's write lock can trail the
+    /// saved clock by the lock wait; anything older is a real rollback and is refused.
+    pub fn observed(&self, now_ms: u64) -> Result<u64, AmountError> {
+        match self.clock_ms {
+            Some(saved) if saved > now_ms => {
+                if saved - now_ms <= LOCK_WAIT_MS {
+                    Ok(saved)
+                } else {
+                    Err(AmountError::Time)
+                }
+            }
+            _ => Ok(now_ms),
+        }
+    }
     pub fn recover(&mut self) {
         self.active = None;
-        self.paused = true;
     }
     pub fn unpause(&mut self, now_ms: u64) -> Result<(), AmountError> {
         if self.closing {
@@ -255,7 +270,19 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn restart_recovery_waits_for_the_payer_and_keeps_credit()
+    fn readings_delayed_by_the_write_lock_are_accepted_but_rollbacks_are_not()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let start = now()?;
+        let mut ledger = Ledger::default();
+        ledger.tick(start + 10_000)?;
+        assert_eq!(ledger.observed(start + 9_000)?, start + 10_000);
+        assert_eq!(ledger.observed(start + 11_000)?, start + 11_000);
+        assert!(ledger.observed(start + 10_000 - LOCK_WAIT_MS - 1).is_err());
+        assert!(ledger.tick(start + 9_000).is_err());
+        Ok(())
+    }
+    #[test]
+    fn restart_recovery_stops_the_clock_and_keeps_pause_and_credit()
     -> Result<(), Box<dyn std::error::Error>> {
         let start = now()?;
         let funded = Amount::try_from(100_000)?;
@@ -266,14 +293,19 @@ mod tests {
         ledger.recover();
         ledger.validate(funded)?;
         let balance = ledger.balance()?;
-        assert!(balance.paused && !balance.running);
+        assert!(!balance.paused && !balance.running);
         assert_eq!(balance.used.value(), 1);
         ledger.tick(start + 60_000)?;
         assert_eq!(ledger.balance()?.vpn_ms, 6000);
-        ledger.unpause(start + 60_000)?;
+        ledger.resume(start + 60_000)?;
+        assert!(ledger.balance()?.running);
+        ledger.pause(start + 61_000)?;
+        ledger.recover();
+        assert!(ledger.balance()?.paused);
+        ledger.unpause(start + 62_000)?;
         assert!(!ledger.balance()?.paused && !ledger.balance()?.running);
-        ledger.close(start + 60_001)?;
-        assert!(ledger.unpause(start + 60_002).is_err());
+        ledger.close(start + 62_001)?;
+        assert!(ledger.unpause(start + 62_002).is_err());
         Ok(())
     }
 }

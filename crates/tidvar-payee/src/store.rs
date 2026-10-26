@@ -1,5 +1,5 @@
 use crate::{PayeeError, opening::Accepted};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::{
     fs::{self, OpenOptions},
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
@@ -21,16 +21,20 @@ impl Store {
         if fs::symlink_metadata(path).is_ok_and(|info| info.file_type().is_symlink()) {
             return Err(PayeeError::Storage);
         }
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .open(path)
-            .map_err(|_| PayeeError::Storage)?;
-        file.set_permissions(fs::Permissions::from_mode(0o600))
-            .map_err(|_| PayeeError::Storage)?;
+        // Closing any descriptor for the database releases this process's SQLite locks,
+        // so the permission handle must be gone before the connection opens.
+        {
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o600)
+                .open(path)
+                .map_err(|_| PayeeError::Storage)?;
+            file.set_permissions(fs::Permissions::from_mode(0o600))
+                .map_err(|_| PayeeError::Storage)?;
+        }
         let connection = Connection::open(path).map_err(|_| PayeeError::Storage)?;
         connection
             .execute_batch(
@@ -82,7 +86,7 @@ impl Store {
             )
             .map_err(|_| PayeeError::Storage)?;
         connection
-            .busy_timeout(std::time::Duration::from_millis(100))
+            .busy_timeout(std::time::Duration::from_millis(2000))
             .map_err(|_| PayeeError::Storage)?;
         Ok(Self { connection })
     }
@@ -95,7 +99,7 @@ impl Store {
         let public = tab.keys.public_bytes()?;
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         let previous: Option<Vec<u8>> = transaction
             .query_row(
@@ -168,7 +172,7 @@ impl Store {
         let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         let mut public = Vec::with_capacity(count);
         for _ in 0..count {
@@ -197,7 +201,7 @@ impl Store {
         let hash = message.hash()?;
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         let row=transaction.query_row("SELECT commitment,secret,intent,message,state,signature FROM signing_nonces WHERE id=?1 AND tab_id=?2",params![message.service.id.as_slice(),id.as_slice()],|row|Ok((row.get::<_,Vec<u8>>(0)?,row.get::<_,Option<Vec<u8>>>(1)?.map(Zeroizing::new),row.get::<_,Option<Vec<u8>>>(2)?,row.get::<_,Option<Vec<u8>>>(3)?,row.get::<_,String>(4)?,row.get::<_,Option<Vec<u8>>>(5)?))).optional().map_err(|_|PayeeError::Storage)?.ok_or(PayeeError::Nonce)?;
         let (encoded, secret, intent, previous, state, signature) = row;
@@ -239,7 +243,7 @@ impl Store {
     pub fn discard_nonces(&mut self, id: &[u8; 32], ids: &[[u8; 32]]) -> Result<(), PayeeError> {
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         for nonce in ids {
             transaction.execute("UPDATE signing_nonces SET state='discarded',secret=NULL WHERE id=?1 AND tab_id=?2 AND state='issued' AND message IS NULL",params![nonce.as_slice(),id.as_slice()]).map_err(|_|PayeeError::Storage)?;
@@ -311,7 +315,7 @@ impl Store {
         let tab = self.load(&payment.tab_id)?.ok_or(PayeeError::Terms)?;
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         let previous = runtime(&transaction, &payment.tab_id)?;
         if let Some(row) = &previous
@@ -322,7 +326,11 @@ impl Store {
         }
         let mut balance = ledger(previous.as_ref())?;
         balance.validate(tab.record.body.terms.funded)?;
-        balance.accept(tab.record.body.terms.funded, payment.request.amount, now_ms)?;
+        balance.accept(
+            tab.record.body.terms.funded,
+            payment.request.amount,
+            balance.observed(now_ms)?,
+        )?;
         for message in &payment.request.messages {
             let (encoded, intent): (Vec<u8>, Option<Vec<u8>>) = transaction.query_row(
                 "SELECT commitment,intent FROM signing_nonces WHERE id=?1 AND tab_id=?2 AND state='issued' AND secret IS NOT NULL AND message IS NULL",
@@ -388,7 +396,7 @@ impl Store {
         now_ms: u64,
     ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
         self.change_ledger(id, |ledger| {
-            ledger.tick(now_ms)?;
+            ledger.tick(ledger.observed(now_ms)?)?;
             Ok(())
         })
     }
@@ -397,14 +405,14 @@ impl Store {
         id: &[u8; 32],
         now_ms: u64,
     ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
-        self.change_ledger(id, |ledger| ledger.resume(now_ms))
+        self.change_ledger(id, |ledger| ledger.resume(ledger.observed(now_ms)?))
     }
     pub fn pause_vpn(
         &mut self,
         id: &[u8; 32],
         now_ms: u64,
     ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
-        self.change_ledger(id, |ledger| ledger.pause(now_ms))
+        self.change_ledger(id, |ledger| ledger.pause(ledger.observed(now_ms)?))
     }
     pub fn close_ledger(
         &mut self,
@@ -412,7 +420,7 @@ impl Store {
         now_ms: u64,
     ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
         self.change_ledger(id, |ledger| {
-            ledger.close(now_ms)?;
+            ledger.close(ledger.observed(now_ms)?)?;
             Ok(())
         })
     }
@@ -426,7 +434,7 @@ impl Store {
         let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         let row = runtime(&transaction, id)?;
         let mut ledger = ledger(row.as_ref())?;
@@ -503,7 +511,7 @@ impl Store {
         }
         let transaction = self
             .connection
-            .transaction()
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| PayeeError::Storage)?;
         if let Some(reply) = request_cursor(&transaction, request)? {
             return Ok(reply);
@@ -682,7 +690,7 @@ impl Store {
         id: &[u8; 32],
         now_ms: u64,
     ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
-        self.change_ledger(id, |ledger| ledger.unpause(now_ms))
+        self.change_ledger(id, |ledger| ledger.unpause(ledger.observed(now_ms)?))
     }
     pub fn recover_vpn(
         &mut self,
