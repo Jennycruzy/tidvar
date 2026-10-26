@@ -396,3 +396,26 @@ pub fn check(
         witness_hash,
     })
 }
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Request {
+    #[serde(with = "crate::encoding::bytes")]
+    pub pczt: Vec<u8>,
+    pub amount: Amount,
+    pub anchor_height: u64,
+    pub messages: Vec<crate::frost::Message>,
+    pub shares: Vec<crate::frost::Share>,
+}
+impl Request {
+    pub fn hash(&self, tab_id: &[u8; 32]) -> Result<[u8; 32], IouError> {
+        let message = crate::transport::Message {
+            tab_id: crate::transport::Id(*tab_id),
+            k: 1,
+            previous: None,
+            body: self,
+        };
+        let hash = message.hash().map_err(|_| IouError::Transaction)?;
+        encoding::hash(b"TidvarIou", &hash.0).map_err(|_| IouError::Transaction)
+    }
+}

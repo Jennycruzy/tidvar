@@ -71,6 +71,7 @@ pub struct Payer {
     consumed: Vec<[u8; 32]>,
     record: Option<tidvar_core::record::SignedRecord>,
     pending: Option<SignedTransaction>,
+    paid: u64,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -93,6 +94,8 @@ struct Backup {
     consumed: Vec<[u8; 32]>,
     record: Option<tidvar_core::record::SignedRecord>,
     pending: Option<SignedTransaction>,
+    #[serde(default)]
+    paid: u64,
     #[serde(with = "tidvar_core::encoding::fixed32")]
     owner: [u8; 32],
 }
@@ -153,6 +156,7 @@ impl PendingPayer {
             consumed: Vec::new(),
             record: None,
             pending: None,
+            paid: 0,
         })
     }
 }
@@ -214,6 +218,18 @@ impl Payer {
         {
             return Ok(pending.clone());
         }
+        if cooperative {
+            if amount > self.paid {
+                return Err(PayerError::Backup);
+            }
+        } else {
+            tidvar_core::params::check_payment(
+                record.body.terms.funded,
+                tidvar_core::params::Amount::try_from(self.paid).map_err(|_| PayerError::Backup)?,
+                tidvar_core::params::Amount::try_from(amount).map_err(|_| PayerError::Backup)?,
+            )
+            .map_err(|_| PayerError::Backup)?;
+        }
         let mut messages = Vec::new();
         let mut shares = Vec::new();
         for (spend, service) in checked.spends.iter().zip(services) {
@@ -237,6 +253,9 @@ impl Payer {
             messages,
             shares,
         };
+        if !cooperative {
+            self.paid = amount;
+        }
         self.pending = Some(signed.clone());
         Ok(signed)
     }
@@ -396,6 +415,7 @@ impl Payer {
             consumed: self.consumed.clone(),
             record: self.record.clone(),
             pending: self.pending.clone(),
+            paid: self.paid,
             owner: reddsa::VerificationKey::from(&record_key).into(),
         };
         Ok(Zeroizing::new(
@@ -447,6 +467,7 @@ impl Payer {
             consumed: backup.consumed,
             record: None,
             pending: backup.pending,
+            paid: backup.paid,
         };
         if let Some(record) = backup.record {
             record.verify()?;
@@ -455,7 +476,13 @@ impl Payer {
             if expected.canonical()? != record.body.canonical()? {
                 return Err(PayerError::Backup);
             }
+            if restored.paid > record.body.maximum_payment.value() {
+                return Err(PayerError::Backup);
+            }
             restored.record = Some(record);
+        }
+        if restored.record.is_none() && restored.paid != 0 {
+            return Err(PayerError::Backup);
         }
         Ok(restored)
     }

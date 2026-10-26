@@ -54,6 +54,14 @@ impl Store {
                 message BLOB CHECK(message IS NULL OR length(message)=32),
                 state TEXT NOT NULL CHECK(state IN ('issued','used','discarded')),
                 signature BLOB
+            );
+            CREATE TABLE IF NOT EXISTS balances (
+                tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
+                ledger BLOB NOT NULL,
+                newest BLOB,
+                request BLOB CHECK(request IS NULL OR length(request)=32),
+                witness BLOB CHECK(witness IS NULL OR length(witness)=32),
+                receipt BLOB
             );",
             )
             .map_err(|_| PayeeError::Storage)?;
@@ -215,8 +223,208 @@ impl Store {
             .transaction()
             .map_err(|_| PayeeError::Storage)?;
         for nonce in ids {
-            transaction.execute("UPDATE signing_nonces SET state='discarded',secret=NULL WHERE id=?1 AND tab_id=?2 AND state='issued'",params![nonce.as_slice(),id.as_slice()]).map_err(|_|PayeeError::Storage)?;
+            transaction.execute("UPDATE signing_nonces SET state='discarded',secret=NULL WHERE id=?1 AND tab_id=?2 AND state='issued' AND message IS NULL",params![nonce.as_slice(),id.as_slice()]).map_err(|_|PayeeError::Storage)?;
         }
         transaction.commit().map_err(|_| PayeeError::Storage)
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PaymentReceipt {
+    #[serde(with = "tidvar_core::encoding::fixed32")]
+    pub request: [u8; 32],
+    pub balance: tidvar_core::ledger::Balance,
+}
+type RuntimeRow = (
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+);
+fn runtime(connection: &Connection, id: &[u8; 32]) -> Result<Option<RuntimeRow>, PayeeError> {
+    connection
+        .query_row(
+            "SELECT ledger,newest,request,witness,receipt FROM balances WHERE tab_id=?1",
+            params![id.as_slice()],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|_| PayeeError::Storage)
+}
+fn ledger(row: Option<&RuntimeRow>) -> Result<tidvar_core::ledger::Ledger, PayeeError> {
+    row.map(|row| serde_json::from_slice(&row.0).map_err(|_| PayeeError::Storage))
+        .unwrap_or_else(|| Ok(tidvar_core::ledger::Ledger::default()))
+}
+fn json<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, PayeeError> {
+    serde_json::to_vec(value).map_err(|_| PayeeError::Storage)
+}
+impl Store {
+    pub fn payment_witness(&self, id: &[u8; 32]) -> Result<Option<[u8; 32]>, PayeeError> {
+        runtime(&self.connection, id)?
+            .and_then(|row| row.3)
+            .map(|bytes| bytes.try_into().map_err(|_| PayeeError::Storage))
+            .transpose()
+    }
+    pub fn newest_iou(
+        &self,
+        id: &[u8; 32],
+    ) -> Result<Option<tidvar_core::iou::Request>, PayeeError> {
+        runtime(&self.connection, id)?
+            .and_then(|row| row.1)
+            .map(|bytes| serde_json::from_slice(&bytes).map_err(|_| PayeeError::Storage))
+            .transpose()
+    }
+    pub fn accept_iou(
+        &mut self,
+        payment: crate::payments::VerifiedIou,
+        now_ms: u64,
+    ) -> Result<PaymentReceipt, PayeeError> {
+        use tidvar_core::{frost::Commitment, iou::Request};
+        let tab = self.load(&payment.tab_id)?.ok_or(PayeeError::Terms)?;
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| PayeeError::Storage)?;
+        let previous = runtime(&transaction, &payment.tab_id)?;
+        if let Some(row) = &previous
+            && row.2.as_deref() == Some(payment.hash.as_slice())
+        {
+            return serde_json::from_slice(row.4.as_deref().ok_or(PayeeError::Storage)?)
+                .map_err(|_| PayeeError::Storage);
+        }
+        let mut balance = ledger(previous.as_ref())?;
+        balance.validate(tab.record.body.terms.funded)?;
+        balance.accept(tab.record.body.terms.funded, payment.request.amount, now_ms)?;
+        for message in &payment.request.messages {
+            let (encoded, intent): (Vec<u8>, Option<Vec<u8>>) = transaction.query_row(
+                "SELECT commitment,intent FROM signing_nonces WHERE id=?1 AND tab_id=?2 AND state='issued' AND secret IS NOT NULL AND message IS NULL",
+                params![message.service.id.as_slice(),payment.tab_id.as_slice()],
+                |row| Ok((row.get(0)?,row.get(1)?)),
+            ).optional().map_err(|_| PayeeError::Storage)?.ok_or(PayeeError::Nonce)?;
+            let commitment: Commitment =
+                serde_json::from_slice(&encoded).map_err(|_| PayeeError::Storage)?;
+            if commitment.id != message.service.id
+                || commitment.data != message.service.data
+                || intent
+                    .as_ref()
+                    .is_some_and(|value| value.as_slice() != message.sighash)
+            {
+                return Err(PayeeError::Nonce);
+            }
+            let hash = message.hash()?;
+            let changed = transaction.execute(
+                "UPDATE signing_nonces SET message=?1 WHERE id=?2 AND tab_id=?3 AND state='issued' AND message IS NULL",
+                params![hash.as_slice(),message.service.id.as_slice(),payment.tab_id.as_slice()],
+            ).map_err(|_| PayeeError::Storage)?;
+            if changed != 1 {
+                return Err(PayeeError::Nonce);
+            }
+        }
+        if let Some(encoded) = previous.as_ref().and_then(|row| row.1.as_deref()) {
+            let old: Request = serde_json::from_slice(encoded).map_err(|_| PayeeError::Storage)?;
+            for message in old.messages {
+                let changed = transaction.execute(
+                    "UPDATE signing_nonces SET state='discarded',secret=NULL WHERE id=?1 AND tab_id=?2 AND state='issued'",
+                    params![message.service.id.as_slice(),payment.tab_id.as_slice()],
+                ).map_err(|_| PayeeError::Storage)?;
+                if changed != 1 {
+                    return Err(PayeeError::Nonce);
+                }
+            }
+        }
+        let receipt = PaymentReceipt {
+            request: payment.hash,
+            balance: balance.balance()?,
+        };
+        transaction.execute(
+            "INSERT INTO balances (tab_id,ledger,newest,request,witness,receipt) VALUES (?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(tab_id) DO UPDATE SET ledger=excluded.ledger,newest=excluded.newest,request=excluded.request,witness=excluded.witness,receipt=excluded.receipt",
+            params![payment.tab_id.as_slice(),json(&balance)?,json(&payment.request)?,payment.hash.as_slice(),payment.witness.as_slice(),json(&receipt)?],
+        ).map_err(|_| PayeeError::Storage)?;
+        transaction
+            .execute(
+                "UPDATE tabs SET paid=?1,used_ms=?2 WHERE id=?3",
+                params![
+                    receipt.balance.paid.value(),
+                    receipt.balance.vpn_ms,
+                    payment.tab_id.as_slice()
+                ],
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        transaction.commit().map_err(|_| PayeeError::Storage)?;
+        Ok(receipt)
+    }
+    pub fn balance(
+        &mut self,
+        id: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| {
+            ledger.tick(now_ms)?;
+            Ok(())
+        })
+    }
+    pub fn resume_vpn(
+        &mut self,
+        id: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| ledger.resume(now_ms))
+    }
+    pub fn pause_vpn(
+        &mut self,
+        id: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| ledger.pause(now_ms))
+    }
+    pub fn close_ledger(
+        &mut self,
+        id: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        self.change_ledger(id, |ledger| {
+            ledger.close(now_ms)?;
+            Ok(())
+        })
+    }
+    fn change_ledger(
+        &mut self,
+        id: &[u8; 32],
+        action: impl FnOnce(
+            &mut tidvar_core::ledger::Ledger,
+        ) -> Result<(), tidvar_core::params::AmountError>,
+    ) -> Result<tidvar_core::ledger::Balance, PayeeError> {
+        let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| PayeeError::Storage)?;
+        let row = runtime(&transaction, id)?;
+        let mut ledger = ledger(row.as_ref())?;
+        ledger.validate(tab.record.body.terms.funded)?;
+        action(&mut ledger)?;
+        let result = ledger.balance()?;
+        transaction.execute(
+            "INSERT INTO balances (tab_id,ledger) VALUES (?1,?2) ON CONFLICT(tab_id) DO UPDATE SET ledger=excluded.ledger",
+            params![id.as_slice(),json(&ledger)?],
+        ).map_err(|_| PayeeError::Storage)?;
+        transaction
+            .execute(
+                "UPDATE tabs SET used_ms=?1 WHERE id=?2",
+                params![result.vpn_ms, id.as_slice()],
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        transaction.commit().map_err(|_| PayeeError::Storage)?;
+        Ok(result)
     }
 }

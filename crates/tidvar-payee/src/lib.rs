@@ -6,6 +6,10 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PayeeError {
     #[error(transparent)]
+    Transaction(#[from] tidvar_core::iou::IouError),
+    #[error(transparent)]
+    Amount(#[from] tidvar_core::params::AmountError),
+    #[error(transparent)]
     Signing(#[from] tidvar_core::frost::SigningError),
     #[error("This signing value has already been assigned to another transaction.")]
     Nonce,
@@ -25,3 +29,6 @@ pub enum PayeeError {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod proof;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod payments;

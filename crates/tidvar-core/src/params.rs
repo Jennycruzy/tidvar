@@ -52,6 +52,8 @@ impl From<Amount> for u64 {
 }
 
 impl Amount {
+    pub const ZERO: Self = Self(0);
+
     pub const fn value(self) -> u64 {
         self.0
     }
