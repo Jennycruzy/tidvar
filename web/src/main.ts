@@ -185,7 +185,7 @@ element<HTMLButtonElement>("vpn-setup").onclick = async () => {
     const config = `[Interface]\nPrivateKey = ${key.privateKey}\nAddress = ${reply.address}\nDNS = ${reply.dns}\n\n[Peer]\nPublicKey = ${reply.server_key}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = ${reply.endpoint}\nPersistentKeepalive = 25\n`;
     await toCanvas(element<HTMLCanvasElement>("vpn-qr"), config, {width: 280, margin: 2});
     if (configUrl) URL.revokeObjectURL(configUrl);
-    configUrl = URL.createObjectURL(new Blob([config], {type: "text/plain"}));
+    configUrl = URL.createObjectURL(new Blob([config], {type: "application/octet-stream"}));
     element<HTMLAnchorElement>("vpn-download").href = configUrl;
     element("vpn-config").hidden = false;
     showMeter(result.meter);
