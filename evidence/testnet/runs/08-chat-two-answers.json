@@ -1,0 +1,17 @@
+{
+  "name": "08-chat-two-answers",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "03589b8743b228c0253a929d57e5ae3a9cd4094dfdafb230ec8a4f12a30bf8d1",
+      "height": 4548566
+    },
+    {
+      "role": "close",
+      "txid": "bba4fd781555ce08ff3c034ccff8bd087ccc9c94a19ed12f58a03979888ed352",
+      "height": 4548570
+    }
+  ]
+}

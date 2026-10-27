@@ -1,0 +1,17 @@
+{
+  "name": "03-owner-android-pause",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "01fa7aefaaeb081ef615719db995ae73bc34e03a871837b0537f2cc663b159eb",
+      "height": 4547115
+    },
+    {
+      "role": "close",
+      "txid": "0007803414e4dd41cd829159c808b2f1d9b8ef1a0c628650db94aaabf7c48128",
+      "height": 4547190
+    }
+  ]
+}

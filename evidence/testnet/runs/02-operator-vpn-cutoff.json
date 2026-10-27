@@ -1,0 +1,17 @@
+{
+  "name": "02-operator-vpn-cutoff",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "237f6ab8d8e58b1881a5ac4711deeef5be28e062b4befacb28f7157532f8f80a",
+      "height": 4546607
+    },
+    {
+      "role": "close",
+      "txid": "e4809d86e0f85fd6b07db63f3250f883d41b248436c599296cc93003896bd538",
+      "height": 4546889
+    }
+  ]
+}

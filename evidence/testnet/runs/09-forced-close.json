@@ -1,0 +1,17 @@
+{
+  "name": "09-forced-close",
+  "ending": "forced",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "c1c862ff8a885fb48a12393b4ac09392b60196281d6271a2af116242a0206514",
+      "height": 4548610
+    },
+    {
+      "role": "forced",
+      "txid": "8c5c091a6942dd8f3b2be2bab50c925ca54d43500a39db48f4c171aaa4e25a2f",
+      "height": 4548629
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "10-refund-alone",
+  "ending": "refund",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "1a420bf94dcfc1494faf12da20866b2099dc517f10973883e07e5fd46ffe298b",
+      "height": 4548610
+    },
+    {
+      "role": "refund",
+      "txid": "735b8440ba35255e9b4a130b599e887430304db910f2bbd54c51465ddcb85dcd",
+      "height": 4548658
+    }
+  ]
+}

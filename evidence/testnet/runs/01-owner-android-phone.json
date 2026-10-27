@@ -1,0 +1,17 @@
+{
+  "name": "01-owner-android-phone",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "01d66fd401d7c1211aa5c56c891bd346d407476391dc6d124e27a181ade07f52",
+      "height": 4545920
+    },
+    {
+      "role": "close",
+      "txid": "574cfdbb97570abf98c7a2d38e8570457152136c5bdb04e5d0a00bd560a5c856",
+      "height": 4546009
+    }
+  ]
+}

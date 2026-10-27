@@ -1,0 +1,17 @@
+{
+  "name": "07-desktop-chrome-3",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "12b48f6954dc48da0057f0b2dc803cbe8c23198dabbf429d904bc58ad59c6cc3",
+      "height": 4548414
+    },
+    {
+      "role": "close",
+      "txid": "32a9275e505759655fa74dd551cddd4112c55dfbcae5116901f5e21b5290617a",
+      "height": 4548460
+    }
+  ]
+}

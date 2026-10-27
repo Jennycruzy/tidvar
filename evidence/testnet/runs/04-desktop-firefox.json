@@ -1,0 +1,17 @@
+{
+  "name": "04-desktop-firefox",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "4bcf92f1bf834f3d08dd6b5f4b0637096ebb3b64b2d1f6ff512bf6bd4d04df1f",
+      "height": 4548349
+    },
+    {
+      "role": "close",
+      "txid": "6665ea4a4b662b0c1e1b0c16a74a58dc3cb702291124b3f61157a63c5eea6519",
+      "height": 4548400
+    }
+  ]
+}
