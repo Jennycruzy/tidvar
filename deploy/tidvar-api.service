@@ -1,5 +1,5 @@
 [Unit]
-Description=Tidvar testnet API
+Description=Tidvar API
 After=network-online.target
 Wants=network-online.target
 
@@ -14,7 +14,7 @@ RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/root/tidvar-data /root/tidvar-private/keys
+ReadWritePaths=/root/tidvar-data /root/tidvar-private/keys /root/tidvar-watch
 UMask=0077
 
 [Install]

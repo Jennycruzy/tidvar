@@ -1,4 +1,4 @@
-//! Attack suite, local part (SPEC 12.2): each attack must be refused with real cryptography.
+//! Attack suite, local part: each attack must be refused with real cryptography.
 use ff::PrimeField;
 use pasta_curves::pallas::Scalar;
 use rand_core::{OsRng, RngCore};

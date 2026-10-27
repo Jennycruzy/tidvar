@@ -1,4 +1,4 @@
-//! Attack suite, time-seal part (SPEC 12.2), with a real drand quicknet round.
+//! Attack suite, time-seal part, with a real drand quicknet round.
 use drand_core::{beacon::ApiBeacon, chain::ChainInfo};
 use tidvar_seal::{verify_beacon, verify_beacon_json};
 

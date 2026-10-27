@@ -1,0 +1,20 @@
+[Unit]
+Description=Tidvar watchtower (finished closes only; no access to keys or the service database)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=TIDVAR_WATCH_QUEUE=/root/tidvar-watch/queue
+ExecStart=/root/tidvar/target/release/tidvar-watch
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-watch
+InaccessiblePaths=/root/tidvar-data /root/tidvar-private
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
