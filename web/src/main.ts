@@ -319,7 +319,7 @@ async function monitor():Promise<void>{
   if(!monitoring)return;
   const started=Date.now();
   try{
-    const response=await fetch("/v1/offer",{credentials:"omit",cache:"no-store",redirect:"error",signal:AbortSignal.timeout(2500)});
+    const response=await fetch("/v1/offer",{credentials:"omit",cache:"no-store",redirect:"error",signal:AbortSignal.timeout(cutoffMode?1000:2500)});
     if(!response.ok)throw new Error("Unreachable");
     element("connection-status").textContent="Connection reachable at "+new Date().toLocaleTimeString()+".";
     observe("connection",{ok:true,started,durationMs:Date.now()-started});
@@ -327,7 +327,7 @@ async function monitor():Promise<void>{
     element("connection-status").textContent="Connection lost at "+new Date().toLocaleTimeString()+". Turn WireGuard off to reconnect.";
     observe("connection",{ok:false,started,durationMs:Date.now()-started});
   }
-  if(monitoring)window.setTimeout(()=>void monitor(),1000);
+  if(monitoring)window.setTimeout(()=>void monitor(),cutoffMode?250:1000);
 }
 element<HTMLButtonElement>("stop-payments").onclick=async()=>{
   stopped=true;
