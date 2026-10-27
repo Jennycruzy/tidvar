@@ -24,6 +24,10 @@ pub enum PayerError {
     Transaction(#[from] tidvar_core::iou::IouError),
     #[error("This payment commitment has already been used.")]
     ReusedCommitment,
+    #[error(
+        "This tab is already closed on chain, so nothing is left to refund. Your share came back in the close."
+    )]
+    AlreadyClosed,
     #[error(transparent)]
     Record(#[from] tidvar_core::record::RecordError),
     #[error(transparent)]
@@ -591,6 +595,9 @@ impl Payer {
             record.body.offer.network.kind(),
         )?;
         let notes = sync.funding_notes()?;
+        if notes.is_empty() {
+            return Err(PayerError::AlreadyClosed);
+        }
         let target =
             u32::try_from(sync.height.saturating_add(1)).map_err(|_| PayerError::Backup)?;
         let pczt = tidvar_core::iou::refund(

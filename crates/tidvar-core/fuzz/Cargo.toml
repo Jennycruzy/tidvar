@@ -1,0 +1,75 @@
+[package]
+name = "tidvar-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+tidvar-core = { path = ".." }
+tidvar-seal = { path = "../../tidvar-seal" }
+tidvar-chain = { path = "../../tidvar-chain" }
+pczt = { git = "https://github.com/zcash/librustzcash", rev = "8672a4b2d60f432664780e6a4e85f49a36805a2a", default-features = false }
+
+[workspace]
+
+[[bin]]
+name = "message"
+path = "fuzz_targets/message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "record"
+path = "fuzz_targets/record.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "iou_request"
+path = "fuzz_targets/iou_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "seal"
+path = "fuzz_targets/seal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "commitment"
+path = "fuzz_targets/commitment.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frames"
+path = "fuzz_targets/frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "snapshot"
+path = "fuzz_targets/snapshot.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "beacon"
+path = "fuzz_targets/beacon.rs"
+test = false
+doc = false
+bench = false
