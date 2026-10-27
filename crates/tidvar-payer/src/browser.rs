@@ -226,6 +226,17 @@ pub fn range_request(start: u64, end: u64) -> Result<Vec<u8>, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn phrase_from_entropy(entropy: &[u8]) -> Result<String, JsValue> {
+    let entropy: [u8; 32] = entropy
+        .try_into()
+        .map_err(|_| JsValue::from_str("This judge code is not complete."))?;
+    Ok(Root::from_entropy(entropy)
+        .phrase()
+        .map_err(error)?
+        .to_string())
+}
+
+#[wasm_bindgen]
 pub fn key_from_phrase(phrase: &str) -> Result<Vec<u8>, JsValue> {
     let root = Root::from_phrase(phrase).map_err(error)?;
     Ok(root.encryption_key().map_err(error)?.to_vec())

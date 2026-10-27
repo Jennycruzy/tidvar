@@ -152,6 +152,8 @@ pub fn must_remove_peer(now_ms: u64, paid_until_ms: u64) -> bool {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Lifetime {
+    /// Testnet only: lets the refund and the forced close be shown end to end in minutes.
+    Minutes15,
     Days3,
     Days7,
     Days30,
@@ -160,6 +162,7 @@ pub enum Lifetime {
 impl Lifetime {
     pub const fn seconds(self) -> u64 {
         match self {
+            Self::Minutes15 => 15 * 60,
             Self::Days3 => 3 * 86_400,
             Self::Days7 => 7 * 86_400,
             Self::Days30 => 30 * 86_400,

@@ -35,6 +35,7 @@ export interface Wasm {
     restore(phrase: string, plaintext: Uint8Array): Payer;
   };
   key_from_phrase(phrase: string): Uint8Array;
+  phrase_from_entropy(entropy: Uint8Array): string;
   message_hash(message: string): string;
   new_open_id(): string;
   round_for_terms(terms: string): bigint;

@@ -299,6 +299,24 @@ async function closeTab():Promise<void>{
   }
 }
 element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+if(location.pathname==="/judge"){
+  element("judge").hidden=false;document.getElementById("setup")?.setAttribute("hidden","");
+  element<HTMLButtonElement>("judge-submit").onclick=async()=>{
+    const button=element<HTMLButtonElement>("judge-submit");button.disabled=true;error.textContent="";
+    try{
+      const parts=element<HTMLInputElement>("judge-code").value.trim().split(".");
+      if(parts.length!==3 || parts[0]!=="tj1" || !/^[0-9a-f]{16}$/.test(parts[2]))throw new Error("This is not a judge code. Copy it again from the submission.");
+      const entropy=Array.from(atob(parts[1].replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
+      if(entropy.length!==32)throw new Error("This judge code is not complete.");
+      const response=await fetch("/v1/judge/"+parts[2],{credentials:"omit",cache:"no-store",redirect:"error"});
+      if(!response.ok)throw new Error("This judge code is not known. Check it and retry.");
+      const result=await call("judge",{entropy,backup:await response.text()}) as {id:string;closing:boolean};
+      localStorage.setItem("tidvar-current-tab",result.id);
+      if(result.closing)localStorage.setItem("tidvar-closing-"+result.id,"yes");
+      history.replaceState(null,"","/tab");location.reload();
+    }catch(failure){error.textContent=failure instanceof Error?failure.message:"The judge tab could not be opened.";button.disabled=false;}
+  };
+}
 element<HTMLButtonElement>("chat-send").onclick=async()=>{
   const input=element<HTMLTextAreaElement>("chat-input"),button=element<HTMLButtonElement>("chat-send"),status=element("chat-status");
   const text=input.value.trim();if(!text||closing)return;
@@ -321,7 +339,11 @@ element<HTMLButtonElement>("download-timings").onclick=()=>{
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 void fetch("/v1/offer",{credentials:"omit",cache:"no-store"}).then(r=>r.json()).then((offer:{network:string})=>{
-  if(offer.network!=="Mainnet")return;
+  if(offer.network!=="Mainnet"){
+    const option=document.createElement("option");option.value="Minutes15";option.textContent="15 minutes (testnet: see the refund)";
+    document.getElementById("lifetime")?.append(option);
+    return;
+  }
   unit="ZEC";
   document.querySelectorAll(".unit").forEach(node=>{node.textContent="ZEC";});
   document.querySelectorAll(".net").forEach(node=>{node.textContent="MAINNET";});

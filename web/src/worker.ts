@@ -1,5 +1,5 @@
 import {Opening} from "../../packages/tidvar-web/src/opening.js";
-import {configureWasm} from "../../packages/tidvar-web/src/wasm.js";
+import {configureWasm,loadWasm} from "../../packages/tidvar-web/src/wasm.js";
 import {parseBackup} from "../../packages/tidvar-web/src/storage.js";
 import {Tab} from "../../packages/tidvar-web/src/tab.js";
 configureWasm("/pkg/tidvar_payer.js");
@@ -31,8 +31,9 @@ host.onmessage = async event => {
       tab = new Tab(opening, id);
       result={id,backup:await opening.session.save(id),funding:JSON.parse(opening.session.current().funding_request()),closing:JSON.parse(opening.session.current().authorization_balance(BigInt(Date.now()))).closing};
     }
-    else if(type==="restore"){
-      const saved=value as {phrase:string;backup:string};
+    else if(type==="restore" || type==="judge"){
+      const given=value as {phrase?:string;entropy?:number[];backup:string};
+      const saved={phrase:given.phrase ?? (await loadWasm()).phrase_from_entropy(Uint8Array.from(given.entropy ?? [])),backup:given.backup};
       const backup=parseBackup(saved.backup);
       await opening.restore(saved.phrase,backup);
       tab=new Tab(opening,backup.id);

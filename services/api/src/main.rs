@@ -46,6 +46,7 @@ pub struct App {
     chat: Arc<Semaphore>,
     limits: Arc<Mutex<BTreeMap<IpAddr, Limits>>>,
     web: Arc<PathBuf>,
+    judges: Arc<PathBuf>,
     proofs: Arc<tidvar_payee::proof::Proofs>,
     payments: Arc<Mutex<PaymentWindows>>,
 }
@@ -153,7 +154,7 @@ async fn relay(
     Ok(bytes_response("application/grpc-web+proto", reply))
 }
 async fn files(State(app): State<App>, uri: Uri) -> Result<Response, Failure> {
-    let path = if matches!(uri.path(), "/" | "/open" | "/tab" | "/vpn") {
+    let path = if matches!(uri.path(), "/" | "/open" | "/tab" | "/vpn" | "/judge") {
         "index.html"
     } else {
         uri.path().trim_start_matches('/')
@@ -177,6 +178,28 @@ async fn files(State(app): State<App>, uri: Uri) -> Result<Response, Failure> {
         .await
         .map_err(|_| Failure(StatusCode::NOT_FOUND, "This page was not found."))?;
     Ok(bytes_response(content_type, body))
+}
+/// An encrypted judge-tab backup. Only the judge code (held by the judge) can unlock it.
+async fn judge_bundle(
+    State(app): State<App>,
+    axum::extract::Path(bundle): axum::extract::Path<String>,
+) -> Result<Response, Failure> {
+    if bundle.len() != 16
+        || !bundle
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err(Failure::bad());
+    }
+    let body = tokio::fs::read(app.judges.join(format!("{bundle}.json")))
+        .await
+        .map_err(|_| {
+            Failure(
+                StatusCode::NOT_FOUND,
+                "This judge code is not known. Check it and retry.",
+            )
+        })?;
+    Ok(bytes_response("application/json", body))
 }
 fn identity(path: &Path) -> anyhow::Result<SigningKey<SpendAuth>> {
     if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
@@ -253,6 +276,7 @@ async fn main() -> anyhow::Result<()> {
         chat: Arc::new(Semaphore::new(1)),
         limits: Arc::new(Mutex::new(BTreeMap::new())),
         web: Arc::new(web),
+        judges: Arc::new(data.join("judge")),
         proofs: Arc::new(tidvar_payee::proof::Proofs::build()),
         payments: Arc::new(Mutex::new(BTreeMap::new())),
     };
@@ -277,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/tabs/{id}/close", post(close::handle))
         .route("/v1/tabs/{id}/chat", post(chat::handle))
         .route("/v1/lwd", post(relay))
+        .route("/v1/judge/{bundle}", get(judge_bundle))
         .fallback(files)
         .layer(DefaultBodyLimit::max(MAX_MESSAGE_BYTES))
         .with_state(app);

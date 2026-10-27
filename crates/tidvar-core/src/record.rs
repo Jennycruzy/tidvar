@@ -199,7 +199,9 @@ impl Terms {
     pub fn validate(&self, offer: &Offer) -> Result<Deadlines, RecordError> {
         offer.validate()?;
         params::spendable(self.funded).map_err(|_| RecordError::Terms)?;
-        if self.lifetime.seconds() * 1000 > offer.maximum_lifetime_ms {
+        if self.lifetime.seconds() * 1000 > offer.maximum_lifetime_ms
+            || (self.lifetime == Lifetime::Minutes15 && offer.network != Network::Testnet)
+        {
             return Err(RecordError::Terms);
         }
         receiver(&self.return_address, offer.network)?;
@@ -439,5 +441,13 @@ mod network_tests {
         assert_eq!(Network::from_name("mainnet"), Some(Network::Mainnet));
         assert_eq!(Network::from_name("test"), Some(Network::Testnet));
         assert_eq!(Network::from_name("regtest"), None);
+    }
+
+    #[test]
+    fn fifteen_minute_tabs_keep_their_deadline_order() -> Result<(), crate::params::AmountError> {
+        let d = Deadlines::new(1_000, Lifetime::Minutes15.seconds() * 1000)?;
+        assert!(1_000 < d.pack_ms && d.pack_ms < d.watch_ms && d.watch_ms < d.close_ms);
+        assert_eq!(d.refund_ms - d.close_ms, 450_000);
+        Ok(())
     }
 }
