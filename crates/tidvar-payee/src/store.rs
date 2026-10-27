@@ -83,6 +83,18 @@ impl Store {
                 tab_id BLOB NOT NULL UNIQUE REFERENCES tabs(id),
                 public_key BLOB NOT NULL UNIQUE CHECK(length(public_key)=32)
             );
+            CREATE TABLE IF NOT EXISTS cooperative_closes (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                tab_id BLOB NOT NULL REFERENCES tabs(id),
+                txid TEXT NOT NULL,
+                raw BLOB NOT NULL,
+                amount INTEGER NOT NULL CHECK(amount>=0),
+                fee INTEGER NOT NULL CHECK(fee>0),
+                returned INTEGER NOT NULL CHECK(returned>=0),
+                expiry INTEGER NOT NULL CHECK(expiry>0),
+                height INTEGER NOT NULL DEFAULT 0 CHECK(height>=0),
+                UNIQUE(tab_id,txid)
+            );
             CREATE TABLE IF NOT EXISTS transfer_counters (
                 tab_id BLOB PRIMARY KEY REFERENCES tabs(id),
                 rx INTEGER NOT NULL CHECK(rx>=0),

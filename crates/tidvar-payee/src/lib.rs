@@ -41,3 +41,6 @@ pub mod payments;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod usage;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod close;

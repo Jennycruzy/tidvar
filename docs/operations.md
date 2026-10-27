@@ -73,3 +73,20 @@ The default per-tab allowance is 5,000,000,000 bytes per UTC day. The server all
 The authenticated balance reply includes the caller's daily usage and an optional DATA_LIMIT or HOST_LIMIT reason. It does not disclose other tabs or their individual counters.
 
 For testnet operation, both units optionally read the same private vpn-limits.env file. TIDVAR_DAILY_BYTES and TIDVAR_MONTHLY_BYTES may lower the respective allowances for a bounded real-traffic check; zero values and values above the normal allowances are rejected. Remove those overrides and restart both services before inviting a phone. Keep the actual measured transfer totals across such checks.
+
+## Return unused funds
+
+The page stops new IOUs before requesting a cooperative close through the authenticated
+POST /v1/tabs/{id}/close route. A close_start request freezes paid-time accounting
+and removes the peer through the controller. The browser syncs the real funding notes,
+checks the agreed outputs, and signs a close_submit request for the frozen amount
+actually used. The service verifies the browser shares and the transaction, completes
+its own shares, and proves it without holding the database mutex during proof generation.
+
+The complete signed raw transaction is saved in SQLite before broadcast. Retrying or
+recovering the page reuses that transaction and reads its actual chain status. A
+close_status request reports the transaction ID, actual fee, returned amount and
+mined height. If an attempt expires without appearing on chain, a fresh close can be
+signed; previous attempts remain in the database. The page hides funding controls
+once a close is submitted. Keep the database and browser backup until the returned
+funds have been received.

@@ -374,6 +374,24 @@ impl BrowserPayer {
                 .map_err(error)?,
         )
     }
+    pub fn prepare_close_request(
+        &mut self,
+        prepared: &str,
+        services: &str,
+        tree: &[u8],
+    ) -> Result<String, JsValue> {
+        let prepared: tidvar_core::iou::Prepared = parse(prepared)?;
+        let services = parse(services)?;
+        let tree = tidvar_chain::transport::unary(tree).map_err(error)?;
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .prepare_close_request(&self.root, &prepared, services, tree)
+                .map_err(error)?,
+        )
+    }
     pub fn commitment_unused(&self, commitment: &str) -> Result<bool, JsValue> {
         let State::Ready(payer) = &self.state else {
             return Err(wrong_state());

@@ -7,11 +7,23 @@ const worker = new Worker(new URL("./worker.ts", import.meta.url), {type: "modul
 let sequence = 0;
 const waiting = new Map<number, {resolve(value: unknown): void; reject(error: Error): void}>();
 const progress = element("progress");const error = element("error");
+function observe(event:string,details:Record<string,unknown>={}):void{
+  const id=localStorage.getItem("tidvar-current-tab");if(!id)return;
+  const key="tidvar-timings-"+id;
+  try{
+    const records=JSON.parse(localStorage.getItem(key)??"[]") as unknown[];
+    records.push({at:Date.now(),monotonicMs:performance.now(),visibility:document.visibilityState,event,...details});
+    localStorage.setItem(key,JSON.stringify(records.slice(-5000)));
+  }catch{element("timing-status").textContent="This browser could not save timing observations. Download them before leaving.";}
+}
+
 worker.onmessage = event => {
+  if(event.data.observation){observe("worker",event.data.observation as Record<string,unknown>);return;}
   if(event.data.meter)showMeter(event.data.meter as Meter);
   if (event.data.progress) {progress.textContent = event.data.progress; return;}
   if (event.data.chain) {
     const {height, value} = event.data.chain as {height: number; value: number};
+    observe("chain",{height,value});
     if (value > 0) startVpn();
     element("chain-status").textContent = value > 0 ? `Payment confirmed: ${decimal(BigInt(value))} TAZ. Synced through block ${height}.` : `No payment confirmed yet. Synced through block ${height}.`;
     return;
@@ -43,8 +55,10 @@ protect.onclick = async () => {
 let funding: {address: string; amount: string; uri: string} | undefined;
 let backupUrl: string | undefined;
 let polling = false;
+let closing = localStorage.getItem("tidvar-closing-"+localStorage.getItem("tidvar-current-tab"))==="yes";
+let closeTimer:number|undefined;
 async function poll(): Promise<void> {
-  if (polling || paying) return;polling = true;
+  if (closing || polling || paying) return;polling = true;
   try {await call("sync");}
   catch (failure) {element("chain-status").textContent = failure instanceof Error ? failure.message : "The connection was interrupted. Retrying.";}
   finally {polling = false;setTimeout(poll, 10000);}
@@ -90,7 +104,7 @@ if (stored) {
     await toCanvas(element<HTMLCanvasElement>("qr"), funding.uri, {width:280,margin:2});
     element("setup").hidden=true;element("funding").hidden=false;
     progress.textContent = "Your saved tab is recovered.";
-    void poll();
+    if(closing){element("vpn").hidden=false;void closeTab();}else void poll();
   }).catch(failure => {error.textContent=failure instanceof Error ? failure.message : "The saved tab could not be recovered.";});
 }
 window.addEventListener("pagehide", () => {if (backupUrl) URL.revokeObjectURL(backupUrl);});
@@ -103,32 +117,37 @@ function showMeter(meter: Meter): void {
   const service = meter.service ?? meter.local;
   element("meter-paid").textContent = `${meter.signed} zat`;
   element("meter-used").textContent = `${service.used} zat`;
-  element("meter-until").textContent = service.paused ? "Paused · prepaid time kept" : service.paid_until_ms ? new Date(service.paid_until_ms).toLocaleTimeString() : "Waiting for the first payment";
-  element("vpn-pause").hidden = service.paused;
-  element("vpn-resume").hidden = !service.paused;
+  element("meter-until").textContent = closing ? (service.closing ? "Closing · billing stopped" : "Closing · no new payments") : service.paused ? "Paused · prepaid time kept" : service.paid_until_ms ? new Date(service.paid_until_ms).toLocaleTimeString() : "Waiting for the first payment";
+  element("vpn-pause").hidden = closing || service.paused;
+  element("vpn-resume").hidden = closing || !service.paused;
 }
 async function payOnce(hidden: boolean): Promise<void> {
+  observe("payment_requested",{hidden});
   try {
     const result = await call("pay", hidden) as {payment: {amount: number; buildAndSignMs: number; deliveryMs: number} | null; meter: Meter};
     showMeter(result.meter);
+    if(result.payment)observe("payment_accepted",{...result.payment,hidden});
     if (result.payment) element("pay-status").textContent = `Paid ${result.payment.amount} zat in total. Signed in ${Math.round(result.payment.buildAndSignMs)} ms, accepted in ${Math.round(result.payment.deliveryMs)} ms.`;
   } catch (failure) {element("pay-status").textContent = failure instanceof Error ? failure.message : "The payment could not be sent. Retrying.";}
 }
 function schedule(): void {
+  if(closing)return;
   if (loop) window.clearTimeout(loop);
   loop = window.setTimeout(async () => {
     loop = undefined;
+    observe("timer");
     if (document.visibilityState === "visible") await payOnce(false);
     schedule();
   }, 10000);
 }
 function startVpn(): void {
-  if (paying) return;paying = true;
+  if (closing || paying) return;paying = true;
   element("vpn").hidden = false;
   void payOnce(false).then(schedule);
 }
 document.addEventListener("visibilitychange", () => {
-  if (!paying) return;
+  observe("visibility");
+  if (closing || !paying) return;
   if (document.visibilityState === "hidden") void payOnce(true);
   else void payOnce(false).then(schedule);
 });
@@ -173,3 +192,72 @@ for (const [id, step] of [["vpn-pause", "vpn_pause"], ["vpn-resume", "vpn_resume
   };
 }
 window.addEventListener("pagehide", () => {if (configUrl) URL.revokeObjectURL(configUrl);});
+
+interface CloseResult {step:string;error?:string;close?:{txid:string;amount:number;fee:number;returned:number;height:number}}
+function showClose(reply:CloseResult):void{
+  const status=element("close-status");
+  observe("close_status",{step:reply.step,...reply.close});
+  if(reply.step==="close_retry"){
+    status.textContent=reply.error ?? "The close needs a refresh. Click Close to retry.";
+    element<HTMLButtonElement>("close-tab").disabled=false;
+    return;
+  }
+  if(reply.close){
+    const receipt=reply.close;
+    status.textContent=reply.step==="close_mined"
+      ? "Closed in block "+receipt.height+". Returned "+decimal(BigInt(receipt.returned))+" TAZ; service "+receipt.amount+" zat; network fee "+receipt.fee+" zat. Transaction: "+receipt.txid
+      : "Close submitted. Waiting for a block. Transaction: "+receipt.txid;
+    element("funding").hidden=true;
+    element("vpn-config").hidden=true;
+    element("vpn-setup").hidden=true;
+  }
+  if(reply.step==="close_mined"){
+    element<HTMLButtonElement>("close-tab").disabled=true;
+    return;
+  }
+  if(reply.step==="close_expired"){
+    status.textContent="The close expired without being mined. Retrying with a fresh transaction.";
+    closeTimer=window.setTimeout(()=>void closeTab(),5000);
+  }else{
+    closeTimer=window.setTimeout(()=>void checkClose(),5000);
+  }
+}
+async function checkClose():Promise<void>{
+  try{
+    const result=await call("close_status") as {reply:CloseResult;meter:Meter};
+    showMeter(result.meter);showClose(result.reply);
+  }catch(failure){
+    element("close-status").textContent=failure instanceof Error?failure.message:"The close status could not be read. Retrying.";
+    closeTimer=window.setTimeout(()=>void checkClose(),5000);
+  }
+}
+async function closeTab():Promise<void>{
+  closing=true;
+  observe("close_requested");
+  if(loop)window.clearTimeout(loop);
+  if(closeTimer)window.clearTimeout(closeTimer);
+  const id=localStorage.getItem("tidvar-current-tab");
+  if(id)localStorage.setItem("tidvar-closing-"+id,"yes");
+  const button=element<HTMLButtonElement>("close-tab");
+  button.disabled=true;
+  element("vpn-pause").hidden=true;element("vpn-resume").hidden=true;
+  element("close-status").textContent="Stopping paid time and preparing your return transaction.";
+  try{
+    const result=await call("close") as {reply:CloseResult;meter:Meter};
+    showMeter(result.meter);showClose(result.reply);
+  }catch(failure){
+    element("close-status").textContent=failure instanceof Error?failure.message:"The close is saved. Retry to continue.";
+    button.disabled=false;
+  }
+}
+element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+
+
+element<HTMLButtonElement>("download-timings").onclick=()=>{
+  const id=localStorage.getItem("tidvar-current-tab");if(!id)return;
+  const data=localStorage.getItem("tidvar-timings-"+id)??"[]";
+  const url=URL.createObjectURL(new Blob([data],{type:"application/json"}));
+  const link=document.createElement("a");link.href=url;link.download="tidvar-timings.json";link.click();
+  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+observe("page_loaded");

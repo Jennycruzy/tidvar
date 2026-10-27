@@ -668,6 +668,46 @@ impl Payer {
         self.channel.pending_paid = Some(previous);
         Ok(request)
     }
+    pub fn prepare_close_request(
+        &mut self,
+        root: &Root,
+        prepared: &tidvar_core::iou::Prepared,
+        services: Vec<tidvar_core::frost::Commitment>,
+        tree: tidvar_chain::service::TreeState,
+    ) -> Result<tidvar_core::transport::Authenticated, PayerError> {
+        if self.channel.pending.is_some() {
+            return Err(PayerError::Pending);
+        }
+        if !prepared.cooperative
+            || !self
+                .authorizer
+                .balance()
+                .map_err(|_| PayerError::Backup)?
+                .closing
+        {
+            return Err(PayerError::Backup);
+        }
+        let signed = self.sign_transaction(
+            &prepared.pczt,
+            prepared.amount,
+            prepared.anchor_height,
+            true,
+            tree,
+            services,
+        )?;
+        let payment = tidvar_core::iou::Request {
+            pczt: prepared.pczt.clone(),
+            amount: tidvar_core::params::Amount::try_from(prepared.amount)
+                .map_err(|_| PayerError::Backup)?,
+            anchor_height: prepared.anchor_height,
+            messages: signed.messages,
+            shares: signed.shares,
+        };
+        self.prepare_request(
+            root,
+            serde_json::json!({"step":"close_submit","payment":payment}),
+        )
+    }
     pub fn commitment_unused(
         &self,
         commitment: &tidvar_core::frost::Commitment,
@@ -737,6 +777,9 @@ impl Payer {
             sent,
             reply.body.get("step").and_then(|value| value.as_str()),
         ) {
+            (Some("close_start"), Some("close_ready")) => {
+                authorizer.close(now_ms).map_err(|_| PayerError::Backup)?;
+            }
             (Some("vpn_pause"), Some("vpn_paused")) => {
                 authorizer.pause(now_ms).map_err(|_| PayerError::Backup)?;
             }

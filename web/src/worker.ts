@@ -30,9 +30,17 @@ host.onmessage = async event => {
       tab = new Tab(opening, id);
       result={id,backup:await opening.session.save(id),funding:JSON.parse(opening.session.current().funding_request())};
     }
-    else if (type === "sync") result = await opening.sync(chain);
+    else if (type === "sync") {
+      const started=performance.now();
+      result=await opening.sync(chain);
+      const memory=(performance as Performance & {memory?:{usedJSHeapSize:number}}).memory?.usedJSHeapSize ?? null;
+      const wasm=performance.getEntriesByType("resource").filter(entry=>entry.name.includes("_bg.wasm")).at(-1) as PerformanceResourceTiming|undefined;
+      host.postMessage({observation:{step:"sync",elapsedMs:performance.now()-started,heapBytes:memory,wasmBytes:wasm?.decodedBodySize ?? null}});
+    }
     else if (type === "pay") result = {payment: await current().pay(Boolean(value), chain) ?? null, meter: meter()};
     else if (type === "vpn") result = {reply: await current().vpn(value as Parameters<Tab["vpn"]>[0]), meter: meter()};
+    else if (type === "close") result={reply:await current().close(chain),meter:meter()};
+    else if (type === "close_status") result={reply:await current().closeStatus(),meter:meter()};
     else if (type === "meter") result = meter();
     else throw new Error("This step is not available.");
     host.postMessage({id, result});

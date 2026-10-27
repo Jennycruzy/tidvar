@@ -16,6 +16,7 @@ export interface Payer {
   pending_request(): string;
   accept_reply(reply: string, now: bigint): string;
   signed_amount(): bigint;
+  prepare_close_request(prepared: string, services: string, tree: Uint8Array): string;
   prepare_iou_request(prepared: string, services: string, tree: Uint8Array): string;
   commitment_unused(commitment: string): boolean;
   funding_note_count(): number;

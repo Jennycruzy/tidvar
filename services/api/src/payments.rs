@@ -45,7 +45,11 @@ fn failure(error: PayeeError) -> Failure {
         _ => Failure::bad(),
     }
 }
-async fn scan(app: &App, client: &mut Client, tab: &Accepted) -> Result<SyncState, Failure> {
+pub(crate) async fn scan(
+    app: &App,
+    client: &mut Client,
+    tab: &Accepted,
+) -> Result<SyncState, Failure> {
     let id = tab.record.body.tab_id;
     let snapshot = app
         .store

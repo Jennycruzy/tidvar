@@ -25,6 +25,8 @@ export class Tab {
       response=await fetch("/v1/tabs/"+this.id+"/iou",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else if(typeof step==="string" && step.startsWith("vpn_")){
       response=await fetch("/v1/tabs/"+this.id+"/vpn",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
+    }else if(typeof step==="string" && step.startsWith("close_")){
+      response=await fetch("/v1/tabs/"+this.id+"/close",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else{throw new Error("This saved request cannot be sent by the payment loop.");}
     if(!response.headers.get("content-type")?.includes("application/json"))throw new Error("The connection was interrupted. Keep this page open; the same request will be retried.");
     const text=await response.text();
@@ -37,7 +39,7 @@ export class Tab {
     if(reply.step==="refused")throw new Error(typeof reply.error==="string"?reply.error:"The service refused this payment. Keep your backup and retry.");
     if(reply.step==="nonces"){this.pool=reply.commitments as Commitment[];this.balance=reply.balance as Balance;}
     if(reply.step==="accepted")this.balance=(reply.receipt as {balance:Balance}).balance;
-    if(typeof reply.step==="string" && reply.step.startsWith("vpn_") && reply.balance)this.balance=reply.balance as Balance;
+    if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_")) && reply.balance)this.balance=reply.balance as Balance;
     return reply;
   }
   async retry(): Promise<Record<string,unknown> | undefined> {return await this.deliver();}
@@ -50,6 +52,35 @@ export class Tab {
     if(reply?.step==="vpn_refused")throw new Error(typeof reply.error==="string"?reply.error:"The VPN request was refused.");
     if(!reply || reply.step===undefined || !String(reply.step).startsWith("vpn_"))throw new Error("The VPN request was not confirmed. Keep this page open and retry.");
     return reply;
+  }
+  private async closeRequest(step: "close_start" | "close_status"): Promise<Record<string,unknown>> {
+    this.opening.session.current().prepare_request(JSON.stringify({step}));
+    await this.opening.session.save(this.id);
+    const reply=await this.deliver();
+    if(!reply || typeof reply.step!=="string" || !reply.step.startsWith("close_"))throw new Error("The close was not confirmed. Keep this page open and retry.");
+    return reply;
+  }
+  async close(progress:(height:bigint,value:bigint)=>void):Promise<Record<string,unknown>> {
+    let reply=await this.deliver();
+    if(reply?.step==="close_mined" || reply?.step==="close_submitted")return reply;
+    if(reply?.step!=="close_ready")reply=await this.closeRequest("close_start");
+    if(reply.step!=="close_ready")return reply;
+    const used=reply.used;
+    if(typeof used!=="number" || !Number.isSafeInteger(used) || used<0)throw new Error("The service returned an invalid closing amount.");
+    await this.opening.sync(progress);
+    await this.opening.session.save(this.id);
+    const payer=this.opening.session.current(),wasm=await loadWasm();
+    const prepared=JSON.parse(payer.prepare_transaction(BigInt(used),true)) as {anchor_height:number};
+    const tree=await relay("GetTreeState",wasm.tree_request(BigInt(prepared.anchor_height)));
+    payer.prepare_close_request(JSON.stringify(prepared),JSON.stringify(reply.commitments),tree);
+    await this.opening.session.save(this.id);
+    const closed=await this.deliver();
+    if(!closed)throw new Error("The close is saved. Keep this page open and retry.");
+    return closed;
+  }
+  async closeStatus():Promise<Record<string,unknown>>{
+    await this.deliver();
+    return await this.closeRequest("close_status");
   }
   async nonces(): Promise<Record<string,unknown>> {
     await this.deliver();
