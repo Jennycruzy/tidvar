@@ -90,3 +90,50 @@ mined height. If an attempt expires without appearing on chain, a fresh close ca
 signed; previous attempts remain in the database. The page hides funding controls
 once a close is submitted. Keep the database and browser backup until the returned
 funds have been received.
+
+## Browser recovery and timing observations
+
+Download the latest encrypted backup before moving to another browser, and close the
+old page first. The recovery form unlocks it locally with the saved words; neither
+the words nor the payer share is sent to the service. Reloading a closing tab resumes
+the same closing transaction. Backups downloaded after payments contain the current
+request counter and saved signing state.
+
+Stop new payments cancels the browser's payment loop without sending Pause. A payment
+already in flight finishes first. The connection monitor then records actual successful
+and failed HTTPS requests, with a timeout; it does not claim that ordinary internet
+reachability proves the VPN is on. Existing paid time, including an away payment,
+remains valid until its deadline. Use this check before paying for background time
+if measuring a short cutoff. Pause requests an immediate cut and preserves prepaid time.
+
+Download timing observations exports local sync durations, available browser memory
+and WASM size measurements, actual payment signing and delivery durations, visibility
+changes, timer firings and closing receipts. Unsupported memory measurements are null.
+No backup words, payer shares or WireGuard private keys are included.
+
+## HTTPS for a phone
+
+The API listens on loopback. The optional tidvar-https service forwards it through a
+Cloudflare Quick Tunnel using a separately verified cloudflared executable. Install
+the executable at /root/tidvar-private/bin/cloudflared and an empty configuration
+file at /root/tidvar-private/https/empty.yml. Install deploy/tidvar-https.service,
+reload systemd and start it. Read the assigned HTTPS hostname from its journal,
+then check the page, offer and WASM resources externally before using it on a phone.
+
+Systemd supervises the tunnel independently of a terminal session. Quick Tunnel
+hostnames are temporary and can change when the tunnel process restarts. Keep a
+current encrypted backup so the recovery form can recover the tab on a new origin.
+
+## Observe testnet funding
+
+The funding_observer example is an operator measurement tool. Set
+TIDVAR_OBSERVER_DATABASE to the existing service database and
+TIDVAR_OBSERVER_AFTER_ROW to its current maximum tabs.rowid before starting.
+Run cargo run -p tidvar-payee --example funding_observer --locked. It reads only new
+tab records, verifies their signed terms, connects to the testnet GetMempoolStream,
+and trial-decrypts Ironwood outputs to the exact tab receiver. Its JSON output
+records first-seen timestamps, transaction IDs, stream reconnects and gaps. Store
+that output privately. It does not sign or broadcast, and does not change the
+one-confirmation requirement for VPN activation. A first-seen time alone does not
+establish broadcast-to-seen latency: compare it with the wallet send time recorded
+on the phone. Historical validation output is explicitly labelled as historical.

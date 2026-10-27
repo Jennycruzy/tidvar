@@ -1,5 +1,6 @@
 import {Opening} from "../../packages/tidvar-web/src/opening.js";
 import {configureWasm} from "../../packages/tidvar-web/src/wasm.js";
+import {parseBackup} from "../../packages/tidvar-web/src/storage.js";
 import {Tab} from "../../packages/tidvar-web/src/tab.js";
 configureWasm("/pkg/tidvar_payer.js");
 const opening = new Opening();
@@ -28,8 +29,16 @@ host.onmessage = async event => {
       const id=String(value);
       if (!await opening.recover(id)) throw new Error("This tab was not found. Use your downloaded backup.");
       tab = new Tab(opening, id);
-      result={id,backup:await opening.session.save(id),funding:JSON.parse(opening.session.current().funding_request())};
+      result={id,backup:await opening.session.save(id),funding:JSON.parse(opening.session.current().funding_request()),closing:JSON.parse(opening.session.current().authorization_balance(BigInt(Date.now()))).closing};
     }
+    else if(type==="restore"){
+      const saved=value as {phrase:string;backup:string};
+      const backup=parseBackup(saved.backup);
+      await opening.restore(saved.phrase,backup);
+      tab=new Tab(opening,backup.id);
+      result={id:backup.id,closing:JSON.parse(opening.session.current().authorization_balance(BigInt(Date.now()))).closing};
+    }
+    else if(type==="backup")result=await opening.session.save(current().id);
     else if (type === "sync") {
       const started=performance.now();
       result=await opening.sync(chain);

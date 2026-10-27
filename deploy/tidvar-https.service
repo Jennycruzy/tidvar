@@ -1,0 +1,22 @@
+[Unit]
+Description=Tidvar testnet HTTPS tunnel
+After=network-online.target tidvar-api.service
+Wants=network-online.target
+Requires=tidvar-api.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/root/tidvar-private/bin/cloudflared --config /root/tidvar-private/https/empty.yml tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:27461
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+CapabilityBoundingSet=
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+MemoryMax=256M
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

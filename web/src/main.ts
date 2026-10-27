@@ -57,6 +57,7 @@ let backupUrl: string | undefined;
 let polling = false;
 let closing = localStorage.getItem("tidvar-closing-"+localStorage.getItem("tidvar-current-tab"))==="yes";
 let closeTimer:number|undefined;
+let stopped=localStorage.getItem("tidvar-stopped-"+localStorage.getItem("tidvar-current-tab"))==="yes";
 async function poll(): Promise<void> {
   if (closing || polling || paying) return;polling = true;
   try {await call("sync");}
@@ -77,6 +78,7 @@ element<HTMLFormElement>("setup").onsubmit = async event => {
     element("address").textContent = funding.address;element("pay-amount").textContent = funding.amount;
     element<HTMLAnchorElement>("wallet").href = funding.uri;
     await toCanvas(element<HTMLCanvasElement>("qr"), funding.uri, {width: 280, margin: 2});
+    element("restore-tab").hidden=true;
     element("setup").hidden = true;element("funding").hidden = false;
     history.replaceState(null, "", "/tab");void poll();
   } catch (failure) {error.textContent = failure instanceof Error ? failure.message : "The setup could not finish. No money moved.";button.disabled = false;}
@@ -93,7 +95,9 @@ if (stored) {
   protect.disabled = true;
   progress.textContent = "Recovering your saved tab.";
   void call("recover", stored).then(async value => {
-    const result = value as {id: string; backup: unknown; funding: typeof funding};
+    const result = value as {id: string; backup: unknown; funding: typeof funding;closing:boolean};
+    if(result.closing){closing=true;localStorage.setItem("tidvar-closing-"+result.id,"yes");}
+    element("restore-tab").hidden=true;
     funding = result.funding;
     if (!funding) throw new Error("The saved payment request could not be read.");
     backupUrl = URL.createObjectURL(new Blob([JSON.stringify(result.backup)], {type:"application/json"}));
@@ -118,6 +122,8 @@ function showMeter(meter: Meter): void {
   element("meter-paid").textContent = `${meter.signed} zat`;
   element("meter-used").textContent = `${service.used} zat`;
   element("meter-until").textContent = closing ? (service.closing ? "Closing · billing stopped" : "Closing · no new payments") : service.paused ? "Paused · prepaid time kept" : service.paid_until_ms ? new Date(service.paid_until_ms).toLocaleTimeString() : "Waiting for the first payment";
+  element("stop-payments").hidden=closing;
+  if(closing)element("restart-payments").hidden=true;
   element("vpn-pause").hidden = closing || service.paused;
   element("vpn-resume").hidden = closing || !service.paused;
 }
@@ -131,23 +137,25 @@ async function payOnce(hidden: boolean): Promise<void> {
   } catch (failure) {element("pay-status").textContent = failure instanceof Error ? failure.message : "The payment could not be sent. Retrying.";}
 }
 function schedule(): void {
-  if(closing)return;
+  if(closing || stopped)return;
   if (loop) window.clearTimeout(loop);
   loop = window.setTimeout(async () => {
     loop = undefined;
     observe("timer");
-    if (document.visibilityState === "visible") await payOnce(false);
+    if (!stopped && document.visibilityState === "visible") await payOnce(false);
     schedule();
   }, 10000);
 }
 function startVpn(): void {
-  if (closing || paying) return;paying = true;
+  if (closing) return;
   element("vpn").hidden = false;
+  if(stopped){element("restart-payments").hidden=false;return;}
+  if(paying)return;paying = true;
   void payOnce(false).then(schedule);
 }
 document.addEventListener("visibilitychange", () => {
   observe("visibility");
-  if (closing || !paying) return;
+  if (closing || stopped || !paying) return;
   if (document.visibilityState === "hidden") void payOnce(true);
   else void payOnce(false).then(schedule);
 });
@@ -261,3 +269,62 @@ element<HTMLButtonElement>("download-timings").onclick=()=>{
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 observe("page_loaded");
+
+async function downloadBackup():Promise<void>{
+  try{
+    const backup=await call("backup");
+    const url=URL.createObjectURL(new Blob([JSON.stringify(backup)],{type:"application/json"}));
+    const link=document.createElement("a");link.href=url;link.download="tidvar-backup.json";link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    observe("backup_downloaded");
+  }catch(failure){error.textContent=failure instanceof Error?failure.message:"The latest backup could not be saved.";}
+}
+element<HTMLAnchorElement>("backup").onclick=event=>{event.preventDefault();void downloadBackup();};
+element<HTMLButtonElement>("export-backup").onclick=()=>void downloadBackup();
+element<HTMLFormElement>("restore-tab").onsubmit=async event=>{
+  event.preventDefault();error.textContent="";
+  const file=element<HTMLInputElement>("restore-file").files?.[0];
+  const phrase=element<HTMLInputElement>("restore-phrase").value.trim();
+  element<HTMLInputElement>("restore-phrase").value="";
+  if(!file || file.size>32*1024*1024){error.textContent="Choose your encrypted Tidvar backup file.";return;}
+  const button=element<HTMLButtonElement>("restore-submit");button.disabled=true;
+  try{
+    const result=await call("restore",{phrase,backup:await file.text()}) as {id:string;closing:boolean};
+    localStorage.setItem("tidvar-current-tab",result.id);
+    if(result.closing)localStorage.setItem("tidvar-closing-"+result.id,"yes");
+    history.replaceState(null,"","/tab");location.reload();
+  }catch(failure){error.textContent=failure instanceof Error?failure.message:"The backup could not be recovered.";button.disabled=false;}
+};
+
+let monitoring=false;
+async function monitor():Promise<void>{
+  if(!monitoring)return;
+  const started=Date.now();
+  try{
+    const response=await fetch("/v1/offer",{credentials:"omit",cache:"no-store",redirect:"error",signal:AbortSignal.timeout(2500)});
+    if(!response.ok)throw new Error("Unreachable");
+    element("connection-status").textContent="Connection reachable at "+new Date().toLocaleTimeString()+".";
+    observe("connection",{ok:true,started,durationMs:Date.now()-started});
+  }catch{
+    element("connection-status").textContent="Connection lost at "+new Date().toLocaleTimeString()+". Turn WireGuard off to reconnect.";
+    observe("connection",{ok:false,started,durationMs:Date.now()-started});
+  }
+  if(monitoring)window.setTimeout(()=>void monitor(),1000);
+}
+element<HTMLButtonElement>("stop-payments").onclick=async()=>{
+  stopped=true;
+  if(loop)window.clearTimeout(loop);
+  const id=localStorage.getItem("tidvar-current-tab");if(id)localStorage.setItem("tidvar-stopped-"+id,"yes");
+  await queue;
+  observe("payments_stopped");
+  element("pay-status").textContent="New payments stopped. The VPN cuts when your paid time runs out. Away time already paid still counts; Pause cuts immediately.";
+  element("restart-payments").hidden=false;
+  if(!monitoring){monitoring=true;void monitor();}
+};
+element<HTMLButtonElement>("restart-payments").onclick=()=>{
+  stopped=false;
+  const id=localStorage.getItem("tidvar-current-tab");if(id)localStorage.removeItem("tidvar-stopped-"+id);
+  observe("payments_restarted");
+  element("restart-payments").hidden=true;
+  void payOnce(false).then(schedule);
+};

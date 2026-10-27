@@ -84,6 +84,12 @@ export class Opening {
     progress("The tab is saved. Keep your backup before paying.");
     return {id, backup, funding: JSON.parse(payer.funding_request()) as Funding};
   }
+  async restore(phrase:string,backup:EncryptedBackup):Promise<void>{
+    this.wasm=await loadWasm();
+    await this.session.restore(phrase,backup);
+    const record=JSON.parse(this.session.current().signed_record()) as {body:{tab_id:string}};
+    if(hexId(record.body.tab_id)!==backup.id)throw new Error("The backup belongs to another tab.");
+  }
   async recover(id: string): Promise<boolean> {
     this.wasm = await loadWasm();
     return await this.session.recover(id);
