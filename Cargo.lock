@@ -3425,6 +3425,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tidvar-402"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "serde_json",
+ "tidvar-core",
+ "tidvar-payee",
+]
+
+[[package]]
 name = "tidvar-api"
 version = "0.1.0"
 dependencies = [
@@ -3511,6 +3522,16 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zeroize",
+]
+
+[[package]]
+name = "tidvar-kit-demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "tidvar-402",
+ "tokio",
 ]
 
 [[package]]

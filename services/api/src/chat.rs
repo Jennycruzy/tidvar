@@ -115,6 +115,27 @@ async fn ask(prompt: &str) -> Result<String, ()> {
     }
 }
 
+/// Settles a payer request that a paid route never answered (for example a tidvar-402 charge
+/// cut off by the network): the saved reply if it was charged, otherwise "not charged".
+pub async fn settle(
+    State(app): State<App>,
+    Path(id): Path<String>,
+    Json(request): Json<Authenticated>,
+) -> Result<axum::response::Response, Failure> {
+    if hex::decode(id).map_err(|_| Failure::bad())?.as_slice() != request.message.tab_id.0
+        || request.message.body["step"] != "charge"
+    {
+        return Err(Failure::bad());
+    }
+    let mut store = app.store.lock().map_err(|_| Failure::internal())?;
+    let reply = store
+        .save_reply(
+            &request,
+            serde_json::json!({"step":"charge_refused","error":"This request was not charged."}),
+        )
+        .map_err(failure)?;
+    Ok(crate::bytes_response("application/json", reply))
+}
 pub async fn handle(
     State(app): State<App>,
     Path(id): Path<String>,

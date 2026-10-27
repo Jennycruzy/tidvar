@@ -1,0 +1,17 @@
+[package]
+name = "tidvar-kit-demo"
+description = "A second service charging 2,000 zat per request with tidvar-402"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+tidvar-402 = {path="../../crates/tidvar-402"}
+axum = {version="0.8",features=["json","tokio","http1"]}
+tokio.workspace = true
+anyhow = "1"
+
+[lints]
+workspace = true

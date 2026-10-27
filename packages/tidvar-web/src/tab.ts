@@ -33,6 +33,8 @@ export class Tab {
       response=await fetch("/v1/tabs/"+this.id+"/vpn",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else if(typeof step==="string" && step.startsWith("close_")){
       response=await fetch("/v1/tabs/"+this.id+"/close",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
+    }else if(step==="charge"){
+      response=await fetch("/v1/tabs/"+this.id+"/settle",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else if(step==="chat"){
       // A chat request left pending is settled without its message: never charged.
       response=await fetch("/v1/tabs/"+this.id+"/chat",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({request:pending,prompt:this.prompt??null})});
@@ -53,7 +55,7 @@ export class Tab {
     if(reply.step==="refused")throw new Error(typeof reply.error==="string"?reply.error:"The service refused this payment. Keep your backup and retry.");
     if(reply.step==="nonces"){this.pool=reply.commitments as Commitment[];this.balance=reply.balance as Balance;}
     if(reply.step==="accepted")this.balance=(reply.receipt as {balance:Balance}).balance;
-    if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_") || reply.step.startsWith("chat_")) && reply.balance)this.balance=reply.balance as Balance;
+    if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_") || reply.step.startsWith("chat_") || reply.step.startsWith("charge")) && reply.balance)this.balance=reply.balance as Balance;
     return reply;
   }
   async retry(): Promise<Record<string,unknown> | undefined> {return await this.deliver();}
@@ -139,6 +141,28 @@ export class Tab {
     if(reply?.step==="chat_refused")throw new Error(typeof reply.error==="string"?reply.error:"The message was not charged.");
     if(reply?.step!=="chat_answered" || typeof answer!=="string")throw new Error("The answer was not received. Keep this page open and retry.");
     return {answer,balance:this.balance};
+  }
+  /** Fetches a route protected by tidvar-402: pays its price from this tab, then returns the response. */
+  async fetchPaid(url: string, progress: (height:bigint,value:bigint)=>void): Promise<{body: string; balance: Balance | undefined}> {
+    const first=await fetch(url,{credentials:"omit",cache:"no-store",redirect:"error"});
+    if(first.status!==402)return {body:await first.text(),balance:this.balance};
+    const price=Number(first.headers.get("tidvar-price"));
+    if(!Number.isSafeInteger(price) || price<=0 || price>100000)throw new Error("This route asks for a price the tab will not pay.");
+    await this.deliver();
+    await this.pay(false,progress,price+CHAT_VPN_MARGIN);
+    const payer=this.opening.session.current();
+    const route=new URL(url,location.href).pathname;
+    const signed=JSON.parse(payer.prepare_request(JSON.stringify({step:"charge",price,route}))) as unknown;
+    await this.opening.session.save(this.id);
+    const header=btoa(JSON.stringify(signed)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    const paid=await fetch(url,{credentials:"omit",cache:"no-store",redirect:"error",headers:{"tidvar-request":header}});
+    const reply=paid.headers.get("tidvar-reply");
+    if(!paid.ok || !reply)throw new Error((await paid.text()) || "The route was not paid.");
+    const decoded=atob(reply.replace(/-/g,"+").replace(/_/g,"/"));
+    const accepted=JSON.parse(payer.accept_reply(decoded,BigInt(Date.now()))) as {balance?: Balance};
+    if(accepted.balance)this.balance=accepted.balance;
+    await this.opening.session.save(this.id);
+    return {body:await paid.text(),balance:this.balance};
   }
   async pay(hidden: boolean, progress: (height:bigint,value:bigint)=>void, extra = 0): Promise<PaymentEvent | undefined> {
     await this.deliver();

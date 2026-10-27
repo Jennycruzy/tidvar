@@ -1,0 +1,18 @@
+[package]
+name = "tidvar-402"
+description = "Charge per request in shielded Zcash from a Tidvar tab (HTTP 402)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+tidvar-core = {path="../tidvar-core"}
+tidvar-payee = {path="../tidvar-payee"}
+axum = {version="0.8",features=["json","tokio","http1"]}
+base64.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

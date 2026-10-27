@@ -300,6 +300,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/tabs/{id}/vpn", post(vpn::handle))
         .route("/v1/tabs/{id}/close", post(close::handle))
         .route("/v1/tabs/{id}/chat", post(chat::handle))
+        .route("/v1/tabs/{id}/settle", post(chat::settle))
         .route("/v1/lwd", post(relay))
         .route("/v1/judge/{bundle}", get(judge_bundle))
         .fallback(files)

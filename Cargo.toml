@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tidvar-core", "crates/tidvar-seal", "crates/tidvar-chain", "crates/tidvar-payer", "crates/tidvar-payee", "crates/tidvar-cli", "services/api", "services/vpn", "watch"]
+members = ["crates/tidvar-core", "crates/tidvar-seal", "crates/tidvar-chain", "crates/tidvar-payer", "crates/tidvar-payee", "crates/tidvar-cli", "crates/tidvar-402", "services/api", "services/vpn", "services/kit-demo", "watch"]
 resolver = "3"
 
 [workspace.package]
