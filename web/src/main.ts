@@ -159,6 +159,8 @@ function schedule(): void {
     loop = undefined;
     observe("timer");
     if (!stopped && document.visibilityState === "visible") await payOnce(false);
+    // A hidden page whose visibilitychange was missed still pays away time once; repeats sign nothing new.
+    else if (!stopped && !cutoffMode) await payOnce(true);
     schedule();
   }, 10000);
 }
