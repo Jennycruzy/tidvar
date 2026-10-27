@@ -165,3 +165,16 @@ rules. Open another tab appears only after the current close is confirmed mined;
 it clears the current selection while preserving the saved encrypted tab records.
 The WireGuard QR is collapsed by default so the phone can import a file without
 showing its VPN key in the recording.
+
+## Fund a browser tab from the testnet operator wallet
+
+The funding_request example takes TIDVAR_STATUS_DATABASE and TIDVAR_TAB_ID,
+verifies the signed testnet record, and prints its joint receiver and agreed
+amount. It uses Store's existing connection handling and does not load or export
+the browser payer state. It does not sign or broadcast. Before sending from a
+separate testnet wallet, check that no funding was already observed and retain
+an exclusive attempt record so retries cannot create duplicate deposits.
+
+WireGuard downloads include a short tab identifier in their filename, such as
+tidvar-abcdef.conf. This keeps a new tunnel distinct from an earlier closed tab
+when importing it on the same phone.

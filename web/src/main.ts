@@ -201,6 +201,7 @@ element<HTMLButtonElement>("vpn-setup").onclick = async () => {
     if (configUrl) URL.revokeObjectURL(configUrl);
     configUrl = URL.createObjectURL(new Blob([config], {type: "application/octet-stream"}));
     element<HTMLAnchorElement>("vpn-download").href = configUrl;
+    element<HTMLAnchorElement>("vpn-download").download = "tidvar-"+id.slice(0,6)+".conf";
     element("vpn-config").hidden = false;
     showMeter(result.meter);
   } catch (failure) {error.textContent = failure instanceof Error ? failure.message : "The VPN could not be set up.";}
