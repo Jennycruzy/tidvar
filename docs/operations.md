@@ -148,3 +148,20 @@ reports the mined height and confirmations only after matching the raw bytes and
 transaction ID. It does not sign, broadcast, or modify the database. A saved
 height of zero can mean the browser stopped polling before confirmation; check
 the chain before considering another transaction.
+
+## Measure a short cutoff on one phone
+
+Prepare short cutoff check is an explicit measurement mode. Use it before setting
+up WireGuard. It keeps foreground IOUs enabled and suppresses the hour-long away
+payment while switching apps. Import the configuration with the tunnel off, return
+to the page for a current payment, enable the tunnel, return again, then stop new
+payments while the connection is live. The timing log records when the mode was
+prepared and each skipped away action. Existing away credit is not erased or
+silently shortened; the page refuses to call an hour of prepaid time a short check.
+
+Restart payments ends this mode and restores normal away payments for background
+use. Closing and recovering a tab retain their existing signing and transaction
+rules. Open another tab appears only after the current close is confirmed mined;
+it clears the current selection while preserving the saved encrypted tab records.
+The WireGuard QR is collapsed by default so the phone can import a file without
+showing its VPN key in the recording.

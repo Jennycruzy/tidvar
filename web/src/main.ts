@@ -58,6 +58,17 @@ let polling = false;
 let closing = localStorage.getItem("tidvar-closing-"+localStorage.getItem("tidvar-current-tab"))==="yes";
 let closeTimer:number|undefined;
 let stopped=localStorage.getItem("tidvar-stopped-"+localStorage.getItem("tidvar-current-tab"))==="yes";
+let cutoffMode=localStorage.getItem("tidvar-cutoff-"+localStorage.getItem("tidvar-current-tab"))==="yes";
+let closeMined=false;
+function setCutoffMode(active:boolean):void{
+  cutoffMode=active;
+  const id=localStorage.getItem("tidvar-current-tab");
+  if(id){if(active)localStorage.setItem("tidvar-cutoff-"+id,"yes");else localStorage.removeItem("tidvar-cutoff-"+id);}
+  element("cutoff-status").textContent=active
+    ? "Short cutoff check: background hour payments are off. Enable WireGuard, return here, then tap Stop new payments."
+    : "";
+}
+if(cutoffMode)setCutoffMode(true);
 async function poll(): Promise<void> {
   if (closing || polling || paying) return;polling = true;
   try {await call("sync");}
@@ -73,6 +84,7 @@ element<HTMLFormElement>("setup").onsubmit = async event => {
     const result = await call("open", {funded, lifetime: element<HTMLSelectElement>("lifetime").value, return_address: element<HTMLInputElement>("return-address").value.trim()}) as {id: string; backup: unknown; funding: typeof funding};
     funding = result.funding;if (!funding) throw new Error("The payment request was not returned.");
     localStorage.setItem("tidvar-current-tab", result.id);
+    void sampleClock();
     backupUrl = URL.createObjectURL(new Blob([JSON.stringify(result.backup)], {type: "application/json"}));
     element<HTMLAnchorElement>("backup").href = backupUrl;
     element("address").textContent = funding.address;element("pay-amount").textContent = funding.amount;
@@ -122,6 +134,7 @@ function showMeter(meter: Meter): void {
   element("meter-paid").textContent = `${meter.signed} zat`;
   element("meter-used").textContent = `${service.used} zat`;
   element("meter-until").textContent = closing ? (service.closing ? "Closing · billing stopped" : "Closing · no new payments") : service.paused ? "Paused · prepaid time kept" : service.paid_until_ms ? new Date(service.paid_until_ms).toLocaleTimeString() : "Waiting for the first payment";
+  element("prepare-cutoff").hidden=closing;
   element("stop-payments").hidden=closing;
   if(closing)element("restart-payments").hidden=true;
   element("vpn-pause").hidden = closing || service.paused;
@@ -156,6 +169,7 @@ function startVpn(): void {
 document.addEventListener("visibilitychange", () => {
   observe("visibility");
   if (closing || stopped || !paying) return;
+  if (document.visibilityState === "hidden" && cutoffMode){observe("cutoff_away_skipped");return;}
   if (document.visibilityState === "hidden") void payOnce(true);
   else void payOnce(false).then(schedule);
 });
@@ -220,6 +234,9 @@ function showClose(reply:CloseResult):void{
     element("vpn-setup").hidden=true;
   }
   if(reply.step==="close_mined"){
+    closeMined=true;
+    element("meter-chain").textContent="2 transactions";
+    element("new-tab").hidden=false;
     element<HTMLButtonElement>("close-tab").disabled=true;
     return;
   }
@@ -322,6 +339,7 @@ element<HTMLButtonElement>("stop-payments").onclick=async()=>{
   if(!monitoring){monitoring=true;void monitor();}
 };
 element<HTMLButtonElement>("restart-payments").onclick=()=>{
+  setCutoffMode(false);
   stopped=false;
   const id=localStorage.getItem("tidvar-current-tab");if(id)localStorage.removeItem("tidvar-stopped-"+id);
   observe("payments_restarted");
@@ -332,11 +350,44 @@ element<HTMLButtonElement>("restart-payments").onclick=()=>{
 // A visible UTC clock lets a phone recording locate the wallet send against server observations.
 function recordingClock():void{element("recording-clock").textContent="UTC "+new Date().toISOString();}
 recordingClock();window.setInterval(recordingClock,100);
-void (async()=>{
+async function sampleClock():Promise<void>{
   const started=Date.now();
   try{
     const response=await fetch("/v1/offer",{credentials:"omit",cache:"no-store",signal:AbortSignal.timeout(10000)});
     const serverDate=response.headers.get("date");
     if(serverDate)observe("clock_sample",{started,finished:Date.now(),serverDate});
   }catch{}
-})();
+}
+void sampleClock();
+
+element<HTMLButtonElement>("prepare-cutoff").onclick=async()=>{
+  if(closing)return;
+  const button=element<HTMLButtonElement>("prepare-cutoff");button.disabled=true;
+  const previous={stopped,paying,cutoffMode};
+  error.textContent="";setCutoffMode(true);
+  element("cutoff-status").textContent="Preparing the short cutoff check. Keep this page visible.";
+  try{
+    stopped=false;
+    const id=localStorage.getItem("tidvar-current-tab");if(id)localStorage.removeItem("tidvar-stopped-"+id);
+    paying=true;
+    await payOnce(false);
+    const snapshot=await call("meter") as Meter;
+    const balance=snapshot.service;
+    if(!balance || balance.paused || balance.closing || !balance.paid_until_ms)throw new Error("Resume the VPN before starting the cutoff check.");
+    const remaining=balance.paid_until_ms-Date.now();
+    if(remaining<=0 || remaining>30000)throw new Error("This tab already has away time prepaid, or its paid time expired. A short check needs a current foreground payment; existing credit is kept.");
+    observe("cutoff_prepared",{paidUntil:balance.paid_until_ms});
+    setCutoffMode(true);showMeter(snapshot);schedule();
+  }catch(failure){
+    stopped=previous.stopped;paying=previous.paying;setCutoffMode(previous.cutoffMode);
+    const id=localStorage.getItem("tidvar-current-tab");
+    if(id){if(stopped)localStorage.setItem("tidvar-stopped-"+id,"yes");else localStorage.removeItem("tidvar-stopped-"+id);}
+    if(paying && !stopped)schedule();
+    error.textContent=failure instanceof Error?failure.message:"The cutoff check could not start.";
+  }finally{button.disabled=false;}
+};
+element<HTMLButtonElement>("new-tab").onclick=()=>{
+  if(!closeMined)return;
+  localStorage.removeItem("tidvar-current-tab");
+  location.assign("/open");
+};
