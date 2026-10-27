@@ -99,22 +99,75 @@ impl Store {
         }
         Ok(due)
     }
+    /// Tabs past their packing deadline whose newest payment is not yet with the watchtower.
+    pub fn packing_due(&self, now_ms: u64) -> Result<Vec<[u8; 32]>, PayeeError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT t.id,t.record FROM tabs t JOIN balances b ON b.tab_id=t.id
+                 WHERE b.newest IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM cooperative_closes c WHERE c.tab_id=t.id)
+                 AND NOT EXISTS (SELECT 1 FROM watch_packs w WHERE w.tab_id=t.id)",
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })
+            .map_err(|_| PayeeError::Storage)?;
+        let mut due = Vec::new();
+        for row in rows {
+            let (id, record) = row.map_err(|_| PayeeError::Storage)?;
+            let record: tidvar_core::record::SignedRecord =
+                serde_json::from_slice(&record).map_err(|_| PayeeError::Storage)?;
+            let deadlines = record.body.terms.validate(&record.body.offer)?;
+            if deadlines.pack_ms <= now_ms {
+                due.push(id.try_into().map_err(|_| PayeeError::Storage)?);
+            }
+        }
+        Ok(due)
+    }
+    /// Records the finished transaction handed to the watchtower.
+    pub fn save_pack(
+        &mut self,
+        id: &[u8; 32],
+        transaction: &zcash_primitives::transaction::Transaction,
+        amount: u64,
+    ) -> Result<(String, Vec<u8>, u64, u32), PayeeError> {
+        let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
+        let deadlines = tab.record.body.terms.validate(&tab.record.body.offer)?;
+        let mut raw = Vec::new();
+        transaction
+            .write(&mut raw)
+            .map_err(|_| PayeeError::Storage)?;
+        let txid = transaction.txid().to_string();
+        let expiry = u32::from(transaction.expiry_height());
+        self.connection.execute(
+            "INSERT INTO watch_packs (tab_id,txid,raw,amount,watch_ms,expiry) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(tab_id) DO NOTHING",
+            params![id.as_slice(),txid,raw,amount,deadlines.watch_ms,expiry],
+        ).map_err(|_| PayeeError::Storage)?;
+        Ok((txid, raw, deadlines.watch_ms, expiry))
+    }
     /// Forced close: completes the service's half of the newest IOU, which the payer already
-    /// signed, so it can be published without the payer. The ledger is frozen first, so no
-    /// later payment can replace it.
+    /// signed, so it can be published without the payer. With `freeze`, the ledger is frozen
+    /// first so no later payment can replace it; without it (packing for the watchtower) the
+    /// tab keeps running and the finished transaction is only a floor for the service.
     pub fn sign_forced<R: RngCore + CryptoRng>(
         &mut self,
         id: &[u8; 32],
         notes: &[FundingNote],
         context: TransactionContext,
         now_ms: u64,
+        freeze: bool,
         rng: &mut R,
     ) -> Result<(Checked, Request), PayeeError> {
         let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
         if context.kind != iou::Kind::Payment {
             return Err(PayeeError::Terms);
         }
-        self.close_ledger(id, now_ms)?;
+        if freeze {
+            self.close_ledger(id, now_ms)?;
+        }
         let request = self.newest_iou(id)?.ok_or(PayeeError::Terms)?;
         let pczt = pczt::Pczt::parse(&request.pczt).map_err(|_| PayeeError::Proof)?;
         let mut checked = iou::check(pczt, &tab.record, notes, request.amount, context, rng)?;

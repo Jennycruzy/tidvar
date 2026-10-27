@@ -3443,6 +3443,7 @@ dependencies = [
  "tidvar-payee",
  "tidvar-seal",
  "tokio",
+ "zcash_primitives",
  "zeroize",
 ]
 
@@ -3594,6 +3595,19 @@ dependencies = [
  "tidvar-payee",
  "wireguard-control",
  "zeroize",
+]
+
+[[package]]
+name = "tidvar-watch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "serde",
+ "serde_json",
+ "tidvar-chain",
+ "tidvar-core",
+ "tokio",
 ]
 
 [[package]]

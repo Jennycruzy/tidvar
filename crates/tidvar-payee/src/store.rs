@@ -82,6 +82,14 @@ impl Store {
                 tab_id BLOB NOT NULL UNIQUE REFERENCES tabs(id),
                 public_key BLOB NOT NULL UNIQUE CHECK(length(public_key)=32)
             );
+            CREATE TABLE IF NOT EXISTS watch_packs (
+                tab_id BLOB PRIMARY KEY CHECK(length(tab_id)=32),
+                txid TEXT NOT NULL,
+                raw BLOB NOT NULL,
+                amount INTEGER NOT NULL,
+                watch_ms INTEGER NOT NULL,
+                expiry INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS cooperative_closes (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 tab_id BLOB NOT NULL REFERENCES tabs(id),
@@ -395,7 +403,18 @@ impl Store {
                     "UPDATE signing_nonces SET state='discarded',secret=NULL WHERE id=?1 AND tab_id=?2 AND state='issued'",
                     params![message.service.id.as_slice(),payment.tab_id.as_slice()],
                 ).map_err(|_| PayeeError::Storage)?;
-                if changed != 1 {
+                // A payment already finished for the watchtower keeps its used nonce.
+                let packed = changed == 0
+                    && transaction
+                        .query_row(
+                            "SELECT 1 FROM signing_nonces WHERE id=?1 AND tab_id=?2 AND state='used'",
+                            params![message.service.id.as_slice(), payment.tab_id.as_slice()],
+                            |_| Ok(()),
+                        )
+                        .optional()
+                        .map_err(|_| PayeeError::Storage)?
+                        .is_some();
+                if changed != 1 && !packed {
                     return Err(PayeeError::Nonce);
                 }
             }

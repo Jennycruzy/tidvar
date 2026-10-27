@@ -1,0 +1,20 @@
+[package]
+name = "tidvar-watch"
+description = "Tidvar watchtower: broadcasts finished closes, holds no keys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+tidvar-core = {path="../crates/tidvar-core"}
+tidvar-chain = {path="../crates/tidvar-chain"}
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+tokio.workspace = true
+anyhow = "1"
+
+[lints]
+workspace = true
