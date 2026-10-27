@@ -17,6 +17,7 @@ serde_json.workspace = true
 rand_core = {workspace=true,features=["getrandom"]}
 reddsa.workspace = true
 hex.workspace = true
+sha2.workspace = true
 zeroize.workspace = true
 tokio.workspace = true
 axum = {version="0.8",features=["json","tokio","http1"]}

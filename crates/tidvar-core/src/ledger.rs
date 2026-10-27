@@ -14,6 +14,9 @@ struct Active {
 pub struct Ledger {
     paid: Amount,
     vpn_ms: u64,
+    /// Zatoshi charged for chat answers (and other per-request products).
+    #[serde(default)]
+    chat_zat: u64,
     active: Option<Active>,
     clock_ms: Option<u64>,
     paused: bool,
@@ -24,6 +27,7 @@ pub struct Balance {
     pub paid: Amount,
     pub used: Amount,
     pub vpn_ms: u64,
+    pub chat_zat: u64,
     pub running: bool,
     pub paused: bool,
     pub closing: bool,
@@ -35,6 +39,7 @@ impl Default for Ledger {
         Self {
             paid: Amount::ZERO,
             vpn_ms: 0,
+            chat_zat: 0,
             active: None,
             clock_ms: None,
             paused: false,
@@ -70,7 +75,13 @@ impl Ledger {
     }
 
     pub fn balance(&self) -> Result<Balance, AmountError> {
-        let used = params::vpn_used(self.vpn_ms)?.min(self.paid);
+        let used = Amount::try_from(
+            params::vpn_used(self.vpn_ms)?
+                .value()
+                .checked_add(self.chat_zat)
+                .ok_or(AmountError::Used)?,
+        )?
+        .min(self.paid);
         let paid_until_ms = self.active.as_ref().map(|active| active.paid_until_ms);
         let cut_at_ms = paid_until_ms
             .map(|until| {
@@ -83,6 +94,7 @@ impl Ledger {
             paid: self.paid,
             used,
             vpn_ms: self.vpn_ms,
+            chat_zat: self.chat_zat,
             running: self.active.is_some(),
             paused: self.paused,
             closing: self.closing,
@@ -92,12 +104,8 @@ impl Ledger {
     }
     pub fn validate(&self, funded: Amount) -> Result<(), AmountError> {
         if self.paid > params::spendable(funded)?
-            || self.vpn_ms
-                > self
-                    .paid
-                    .value()
-                    .checked_mul(params::VPN_UNIT_MS)
-                    .ok_or(AmountError::Time)?
+            || self.chat_zat > self.paid.value()
+            || self.vpn_ms > self.vpn_cap_ms()?
             || (self.active.is_some() && (self.paused || self.closing))
         {
             return Err(AmountError::Used);
@@ -134,6 +142,7 @@ impl Ledger {
                 .min(
                     self.paid
                         .value()
+                        .saturating_sub(self.chat_zat)
                         .checked_mul(params::VPN_UNIT_MS)
                         .ok_or(AmountError::Time)?,
                 );
@@ -157,6 +166,30 @@ impl Ledger {
         let used = self.balance()?.used;
         if let Some(active) = &mut self.active {
             active.paid_until_ms = params::paid_until_ms(now_ms, next, used)?;
+        }
+        Ok(())
+    }
+    fn vpn_cap_ms(&self) -> Result<u64, AmountError> {
+        self.paid
+            .value()
+            .saturating_sub(self.chat_zat)
+            .checked_mul(params::VPN_UNIT_MS)
+            .ok_or(AmountError::Time)
+    }
+    /// Charges one per-request product from prepaid credit; refused when the credit is short.
+    pub fn charge(&mut self, now_ms: u64, price: u64) -> Result<(), AmountError> {
+        if self.closing || price == 0 {
+            return Err(AmountError::Used);
+        }
+        self.tick(now_ms)?;
+        let balance = self.balance()?;
+        if balance.paid.value().saturating_sub(balance.used.value()) < price {
+            return Err(AmountError::Used);
+        }
+        self.chat_zat = self.chat_zat.checked_add(price).ok_or(AmountError::Used)?;
+        let used = self.balance()?.used;
+        if let Some(active) = &mut self.active {
+            active.paid_until_ms = params::paid_until_ms(now_ms, self.paid, used)?;
         }
         Ok(())
     }
@@ -189,6 +222,31 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_charges_need_prepaid_credit_and_shorten_vpn_time() -> Result<(), AmountError> {
+        let funded = Amount::try_from(100_000)?;
+        let mut ledger = Ledger::default();
+        ledger.accept(funded, Amount::try_from(1_100)?, 1_000)?;
+        ledger.resume(1_000)?;
+        let before = ledger.balance()?.paid_until_ms.ok_or(AmountError::Time)?;
+        ledger.charge(1_000, params::CHAT_PRICE)?;
+        let balance = ledger.balance()?;
+        assert_eq!(balance.chat_zat, 1_000);
+        assert_eq!(balance.used.value(), 1_000);
+        assert!(balance.paid_until_ms.ok_or(AmountError::Time)? < before);
+        // Only 100 zat left: a second message is refused and nothing is charged.
+        assert!(ledger.charge(2_000, params::CHAT_PRICE).is_err());
+        assert_eq!(ledger.balance()?.chat_zat, 1_000);
+        ledger.validate(funded)?;
+        // Ledgers saved before chat existed still load.
+        let old: Ledger = serde_json::from_str(
+            r#"{"paid":5,"vpn_ms":0,"active":null,"clock_ms":null,"paused":false,"closing":false}"#,
+        )
+        .map_err(|_| AmountError::Used)?;
+        assert_eq!(old.balance()?.chat_zat, 0);
+        Ok(())
+    }
     fn now() -> Result<u64, Box<dyn std::error::Error>> {
         Ok(u64::try_from(
             std::time::SystemTime::now()

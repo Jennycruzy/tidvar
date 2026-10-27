@@ -10,7 +10,6 @@ use tidvar_core::{
     record::SignedRecord,
 };
 use tidvar_seal::seal::SealedKey;
-use zcash_protocol::consensus::NetworkType;
 use zeroize::Zeroizing;
 
 pub struct Store {
@@ -168,8 +167,13 @@ impl Store {
                     serde_json::from_slice(&record).map_err(|_| PayeeError::Storage)?;
                 let sealed: SealedKey =
                     serde_json::from_slice(&sealed).map_err(|_| PayeeError::Storage)?;
-                let keys =
-                    Keys::restore(Role::Service, &share, &public, &viewing, NetworkType::Test)?;
+                let keys = Keys::restore(
+                    Role::Service,
+                    &share,
+                    &public,
+                    &viewing,
+                    record.body.offer.network.kind(),
+                )?;
                 if record.body.tab_id != *id {
                     return Err(PayeeError::Terms);
                 }
@@ -451,6 +455,57 @@ impl Store {
             ledger.close(ledger.observed(now_ms)?)?;
             Ok(())
         })
+    }
+    /// Charges a per-request product and records the signed reply atomically, so a
+    /// retried request is answered from the cache and never charged twice.
+    pub fn charge_and_reply(
+        &mut self,
+        request: &tidvar_core::transport::Authenticated,
+        price: u64,
+        now_ms: u64,
+        body: impl FnOnce(&tidvar_core::ledger::Balance) -> serde_json::Value,
+    ) -> Result<Vec<u8>, PayeeError> {
+        if let Some(reply) = self.cached_reply(request)? {
+            return Ok(reply);
+        }
+        let id = request.message.tab_id.0;
+        let tab = self.load(&id)?.ok_or(PayeeError::Terms)?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| PayeeError::Storage)?;
+        if let Some(reply) = request_cursor(&transaction, request)? {
+            return Ok(reply);
+        }
+        let row = runtime(&transaction, &id)?;
+        let mut ledger = ledger(row.as_ref())?;
+        ledger.validate(tab.record.body.terms.funded)?;
+        ledger.charge(ledger.observed(now_ms)?, price)?;
+        let balance = ledger.balance()?;
+        transaction.execute(
+            "INSERT INTO balances (tab_id,ledger) VALUES (?1,?2) ON CONFLICT(tab_id) DO UPDATE SET ledger=excluded.ledger",
+            params![id.as_slice(),json(&ledger)?],
+        ).map_err(|_| PayeeError::Storage)?;
+        let hash = request.message.hash().map_err(|_| PayeeError::Exchange)?;
+        let reply = tidvar_core::transport::Message {
+            tab_id: request.message.tab_id,
+            k: request
+                .message
+                .k
+                .checked_add(1)
+                .ok_or(PayeeError::Exchange)?,
+            previous: Some(hash),
+            body: body(&balance),
+        };
+        let encoded = json(&reply)?;
+        let previous = reply.hash().map_err(|_| PayeeError::Exchange)?;
+        transaction.execute(
+            "INSERT INTO message_exchanges (tab_id,next_k,previous,last_request,reply) VALUES (?1,?2,?3,?4,?5)
+             ON CONFLICT(tab_id) DO UPDATE SET next_k=excluded.next_k,previous=excluded.previous,last_request=excluded.last_request,reply=excluded.reply",
+            params![reply.tab_id.0.as_slice(),reply.k.checked_add(1).ok_or(PayeeError::Exchange)?,previous.0.as_slice(),hash.0.as_slice(),encoded],
+        ).map_err(|_|PayeeError::Storage)?;
+        transaction.commit().map_err(|_| PayeeError::Storage)?;
+        Ok(encoded)
     }
     fn change_ledger(
         &mut self,

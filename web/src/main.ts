@@ -3,6 +3,7 @@ import {toCanvas} from "qrcode";
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);if (!value) throw new Error("The page could not be loaded.");return value as T;
 }
+let unit = "TAZ";
 const worker = new Worker(new URL("./worker.ts", import.meta.url), {type: "module"});
 let sequence = 0;
 const waiting = new Map<number, {resolve(value: unknown): void; reject(error: Error): void}>();
@@ -38,7 +39,7 @@ worker.onmessage = event => {
     const {height, value} = event.data.chain as {height: number; value: number};
     observe("chain",{height,value});
     if (value > 0) startVpn();
-    element("chain-status").textContent = value > 0 ? `Payment confirmed: ${decimal(BigInt(value))} TAZ. Synced through block ${height}.` : `No payment confirmed yet. Synced through block ${height}.`;
+    element("chain-status").textContent = value > 0 ? `Payment confirmed: ${decimal(BigInt(value))} ${unit}. Synced through block ${height}.` : `No payment confirmed yet. Synced through block ${height}.`;
     return;
   }
   const pending = waiting.get(event.data.id);if (!pending) return;
@@ -54,10 +55,10 @@ function call(type: string, value?: unknown): Promise<unknown> {
 }
 function decimal(value: bigint): string {return `${value / 100000000n}.${(value % 100000000n).toString().padStart(8, "0")}`.replace(/0+$/, "").replace(/\.$/, "");}
 function amount(text: string): number {
-  if (!/^\d+(\.\d{1,8})?$/.test(text)) throw new Error("Enter a TAZ amount with at most eight decimal places.");
+  if (!/^\d+(\.\d{1,8})?$/.test(text)) throw new Error(`Enter a ${unit} amount with at most eight decimal places.`);
   const [whole, fraction = ""] = text.split(".");
   const value = BigInt(whole) * 100000000n + BigInt(fraction.padEnd(8, "0"));
-  if (value < 50000n || value > 2100000000000000n) throw new Error("Open a tab with at least 0.0005 TAZ.");return Number(value);
+  if (value < 50000n || value > 2100000000000000n) throw new Error(`Open a tab with at least 0.0005 ${unit}.`);return Number(value);
 }
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
@@ -249,7 +250,7 @@ function showClose(reply:CloseResult):void{
   if(reply.close){
     const receipt=reply.close;
     status.textContent=reply.step==="close_mined"
-      ? "Closed in block "+receipt.height+". Returned "+decimal(BigInt(receipt.returned))+" TAZ; service "+receipt.amount+" zat; network fee "+receipt.fee+" zat. Transaction: "+receipt.txid
+      ? "Closed in block "+receipt.height+". Returned "+decimal(BigInt(receipt.returned))+" "+unit+"; service "+receipt.amount+" zat; network fee "+receipt.fee+" zat. Transaction: "+receipt.txid
       : "Close submitted. Waiting for a block. Transaction: "+receipt.txid;
     element("funding").hidden=true;
     element("vpn-config").hidden=true;
@@ -298,6 +299,18 @@ async function closeTab():Promise<void>{
   }
 }
 element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+element<HTMLButtonElement>("chat-send").onclick=async()=>{
+  const input=element<HTMLTextAreaElement>("chat-input"),button=element<HTMLButtonElement>("chat-send"),status=element("chat-status");
+  const text=input.value.trim();if(!text||closing)return;
+  button.disabled=true;status.textContent="Paying 1,000 zat and asking the model. Answers take up to 30 seconds.";
+  const log=element("chat-log"),asked=document.createElement("p");asked.className="chat-you";asked.textContent=text;log.append(asked);
+  try{
+    const result=await call("chat",text) as {answer:string;meter:Meter};
+    const reply=document.createElement("p");reply.className="chat-answer";reply.textContent=result.answer;log.append(reply);
+    input.value="";showMeter(result.meter);status.textContent="Answered. 1,000 zat charged.";observe("chat_answered");
+  }catch(failure){asked.remove();status.textContent=failure instanceof Error?failure.message:"The message was not charged. Try again.";}
+  finally{button.disabled=false;}
+};
 
 
 element<HTMLButtonElement>("download-timings").onclick=()=>{
@@ -307,6 +320,12 @@ element<HTMLButtonElement>("download-timings").onclick=()=>{
   const link=document.createElement("a");link.href=url;link.download="tidvar-timings.json";link.click();
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
+void fetch("/v1/offer",{credentials:"omit",cache:"no-store"}).then(r=>r.json()).then((offer:{network:string})=>{
+  if(offer.network!=="Mainnet")return;
+  unit="ZEC";
+  document.querySelectorAll(".unit").forEach(node=>{node.textContent="ZEC";});
+  document.querySelectorAll(".net").forEach(node=>{node.textContent="MAINNET";});
+}).catch(()=>undefined);
 observe("page_loaded");
 
 async function downloadBackup():Promise<void>{

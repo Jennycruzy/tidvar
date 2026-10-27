@@ -15,6 +15,7 @@ use orchard::{
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use tidvar_core::record::Network;
 use zcash_note_encryption::{EphemeralKeyBytes, try_compact_note_decryption};
 use zcash_primitives::merkle_tree::{
     read_commitment_tree, read_incremental_witness, write_commitment_tree,
@@ -62,10 +63,16 @@ pub struct Snapshot {
     pub block_hash: [u8; 32],
     pub notes: Vec<NoteSnapshot>,
     pub additional_notes: u64,
+    #[serde(default = "testnet")]
+    pub network: Network,
+}
+fn testnet() -> Network {
+    Network::Testnet
 }
 
 #[derive(Clone)]
 pub struct SyncState {
+    network: Network,
     viewing: FullViewingKey,
     tree: Tree,
     pub height: u64,
@@ -115,15 +122,14 @@ impl SyncState {
             .collect()
     }
     pub fn new(viewing_key: &[u8], before: TreeState) -> Result<Self, ChainError> {
-        if before.network != "test" {
-            return Err(ChainError::Network);
-        }
+        let network = Network::from_name(&before.network).ok_or(ChainError::Network)?;
         let viewing =
             FullViewingKey::from_bytes(&fixed(viewing_key)?).ok_or(ChainError::Message)?;
         let tree = tree(&hex::decode(before.ironwood_tree).map_err(|_| ChainError::Message)?)?;
         let mut hash = hex::decode(before.hash).map_err(|_| ChainError::Message)?;
         hash.reverse();
         Ok(Self {
+            network,
             viewing,
             tree,
             height: before.height,
@@ -227,7 +233,7 @@ impl SyncState {
     }
 
     pub fn verify_tip(&self, state: &TreeState) -> Result<(), ChainError> {
-        if state.network != "test" || state.height != self.height {
+        if state.network != self.network.chain_name() || state.height != self.height {
             return Err(ChainError::Network);
         }
         let expected = tree(&hex::decode(&state.ironwood_tree).map_err(|_| ChainError::Message)?)?;
@@ -270,6 +276,7 @@ impl SyncState {
             block_hash: self.block_hash,
             notes,
             additional_notes: self.additional_notes,
+            network: self.network,
         })
     }
 
@@ -330,6 +337,7 @@ impl SyncState {
             });
         }
         Ok(Self {
+            network: snapshot.network,
             viewing,
             tree,
             height: snapshot.height,

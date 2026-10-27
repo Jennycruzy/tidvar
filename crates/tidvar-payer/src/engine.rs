@@ -3,6 +3,7 @@ use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tidvar_chain::sync::{Snapshot, SyncState};
+use tidvar_core::record::Network;
 use tidvar_core::{
     encoding,
     keys::{FirstRound, KeyError, Keys, Role, RoundOne, RoundTwo, SecondRound},
@@ -11,7 +12,6 @@ use tidvar_seal::{
     SealError, quicknet_public_key,
     seal::{Challenge, Opening, SealedKey, VerifiedSeal, Verifier},
 };
-use zcash_protocol::consensus::NetworkType;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 #[derive(Debug, Error)]
@@ -119,9 +119,9 @@ impl Setup {
     }
 }
 impl SetupSecond {
-    pub fn finish(self, peer: RoundTwo) -> Result<UnsealedPayer, PayerError> {
+    pub fn finish(self, peer: RoundTwo, network: Network) -> Result<UnsealedPayer, PayerError> {
         Ok(UnsealedPayer {
-            keys: self.inner.finish(peer, NetworkType::Test)?,
+            keys: self.inner.finish(peer, network.kind())?,
         })
     }
 }
@@ -447,7 +447,11 @@ impl Payer {
             &backup.package.0,
             &backup.public_package,
             &backup.viewing_key,
-            NetworkType::Test,
+            backup
+                .record
+                .as_ref()
+                .map_or(Network::Testnet, |record| record.body.offer.network)
+                .kind(),
         )?;
         let commitment = backup.sealed.commitment()?;
         let owner: [u8; 32] = reddsa::VerificationKey::from(&root.signing_key(&commitment)?).into();

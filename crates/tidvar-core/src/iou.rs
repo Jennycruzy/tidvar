@@ -1,7 +1,7 @@
 use crate::{
     encoding,
     params::{self, Amount},
-    record::{self, Network, SignedRecord},
+    record::{self, SignedRecord},
 };
 use ff::PrimeField;
 use orchard::{
@@ -20,12 +20,7 @@ use zcash_primitives::transaction::{
     builder::{BuildConfig, Builder, BundlePadding, default_tx_expiry_delta},
     fees::zip317::FeeRule,
 };
-use zcash_protocol::{
-    PoolType,
-    consensus::{BlockHeight, BranchId, TEST_NETWORK},
-    memo::MemoBytes,
-    value::Zatoshis,
-};
+use zcash_protocol::{PoolType, consensus::BlockHeight, memo::MemoBytes, value::Zatoshis};
 
 #[derive(Debug, Error)]
 pub enum IouError {
@@ -75,9 +70,6 @@ impl<R: RngCore + CryptoRng> rand_core_new::TryRng for Random<'_, R> {
 impl<R: RngCore + CryptoRng> rand_core_new::TryCryptoRng for Random<'_, R> {}
 fn viewing(record: &SignedRecord) -> Result<FullViewingKey, IouError> {
     record.verify().map_err(|_| IouError::Transaction)?;
-    if record.body.offer.network != Network::Testnet {
-        return Err(IouError::Transaction);
-    }
     let bytes = record
         .body
         .viewing_key
@@ -98,13 +90,16 @@ fn fee(record: &SignedRecord, notes: &[FundingNote], amount: Amount) -> Result<A
         .map_err(|_| IouError::Amount)
 }
 fn expiry(record: &SignedRecord, target: u32, kind: Kind) -> Result<u32, IouError> {
-    if BranchId::for_height(&TEST_NETWORK, BlockHeight::from_u32(target)) != BranchId::Nu7 {
-        return Err(IouError::Transaction);
-    }
+    let branch = record
+        .body
+        .offer
+        .network
+        .ironwood_branch(target)
+        .ok_or(IouError::Transaction)?;
     let expiry = match kind {
         Kind::Payment => record.body.expiry,
         Kind::Cooperative => target
-            .checked_add(default_tx_expiry_delta(BranchId::Nu7))
+            .checked_add(default_tx_expiry_delta(branch))
             .ok_or(IouError::Transaction)?,
     };
     if expiry <= target || expiry > params::MAXIMUM_EXPIRY {
@@ -128,7 +123,7 @@ pub fn build<R: RngCore + CryptoRng>(
     let first = notes.first().ok_or(IouError::Witness)?;
     let anchor = first.path.root(first.note.commitment().into());
     let mut builder = Builder::new(
-        TEST_NETWORK,
+        record.body.offer.network.consensus(),
         BlockHeight::from_u32(target),
         BuildConfig::Standard {
             sapling_anchor: None,
@@ -148,9 +143,9 @@ pub fn build<R: RngCore + CryptoRng>(
             )
             .map_err(|_| IouError::Witness)?;
     }
-    let service = record::receiver(&record.body.offer.address, Network::Testnet)
+    let service = record::receiver(&record.body.offer.address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
-    let payer = record::receiver(&record.body.terms.return_address, Network::Testnet)
+    let payer = record::receiver(&record.body.terms.return_address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
     if kind == Kind::Payment || amount.value() > 0 {
         builder
@@ -234,9 +229,15 @@ pub fn check(
     pczt.resolve_fields().map_err(|_| IouError::Transaction)?;
     let global = pczt.global();
     if *global.tx_version() != 6
-        || *global.consensus_branch_id() != u32::from(BranchId::Nu7)
+        || Some(*global.consensus_branch_id())
+            != record
+                .body
+                .offer
+                .network
+                .ironwood_branch(target)
+                .map(u32::from)
         || *global.expiry_height() != expiry(record, target, kind)?
-        || *global.coin_type() != 1
+        || *global.coin_type() != record.body.offer.network.coin_type()
         || *global.tx_modifiable() != 0
         || *global.fallback_lock_time() != Some(0)
     {
@@ -248,9 +249,9 @@ pub fn check(
     {
         return Err(IouError::Transaction);
     }
-    let service = record::receiver(&record.body.offer.address, Network::Testnet)
+    let service = record::receiver(&record.body.offer.address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
-    let payer = record::receiver(&record.body.terms.return_address, Network::Testnet)
+    let payer = record::receiver(&record.body.terms.return_address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
     let returned = record
         .body

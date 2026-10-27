@@ -17,15 +17,21 @@ use wireguard_control::{Backend, Device, DeviceUpdate, InterfaceName, Key, PeerC
 use zeroize::Zeroizing;
 
 const INTERFACE: &str = "tidvar";
-const DATA: &str = "/root/tidvar-data";
-const PRIVATE: &str = "/root/tidvar-private/keys/vpn-testnet.key";
+fn data() -> String {
+    std::env::var("TIDVAR_DATA_DIR").unwrap_or_else(|_| "/root/tidvar-data".to_owned())
+}
+fn private() -> String {
+    std::env::var("TIDVAR_VPN_KEY")
+        .unwrap_or_else(|_| "/root/tidvar-private/keys/vpn-testnet.key".to_owned())
+}
 fn now() -> Result<u64> {
     Ok(u64::try_from(
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
     )?)
 }
 fn private_key() -> Result<Zeroizing<[u8; 32]>> {
-    let path = Path::new(PRIVATE);
+    let private = private();
+    let path = Path::new(&private);
     if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
         bail!("The VPN key path must not be a link.");
     }
@@ -76,7 +82,7 @@ fn stop() -> Result<()> {
     if let Some(mut secret) = device.private_key.take() {
         secret.0.fill(0);
     }
-    if !Path::new(PRIVATE).exists() {
+    if !Path::new(&private()).exists() {
         bail!("The VPN ownership key is missing; the interface was kept.");
     }
     let secret = private_key()?;
@@ -91,8 +97,8 @@ fn stop() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("The VPN interface could not be removed."))
 }
 fn public_configuration(public: &Key) -> Result<()> {
-    let output = Path::new(DATA).join("vpn.json");
-    let temporary = Path::new(DATA).join("vpn.json.new");
+    let output = Path::new(&data()).join("vpn.json");
+    let temporary = Path::new(&data()).join("vpn.json.new");
     let value =
         serde_json::json!({"server_key":public.to_base64(),"endpoint":"38.49.216.59:51820"});
     let mut file = OpenOptions::new()
@@ -132,7 +138,7 @@ fn run() -> Result<()> {
     if !network.status.success() {
         bail!("The VPN network setup failed. No connection was admitted.");
     }
-    let mut store = Store::open(&Path::new(DATA).join("payee.sqlite"))?;
+    let mut store = Store::open(&Path::new(&data()).join("payee.sqlite"))?;
     for peer in store.peers()? {
         store.recover_vpn(&peer.tab_id)?;
     }
@@ -145,7 +151,7 @@ fn run() -> Result<()> {
             bail!("The VPN readiness signal could not be sent.");
         }
     }
-    eprintln!("Tidvar TESTNET VPN controller ready.");
+    eprintln!("Tidvar VPN controller ready.");
     let mut shaped = HashSet::new();
     loop {
         let cycle = Instant::now();

@@ -1,7 +1,7 @@
 import {Session} from "./session.js";
 import {loadWasm, type Wasm} from "./wasm.js";
 import type {EncryptedBackup} from "./storage.js";
-export interface Offer {version: number; network: "Testnet"; service_name: string; address: string; maximum_lifetime_ms: number; vpn_ms_per_zat: number; service_key: string}
+export interface Offer {version: number; network: "Testnet" | "Mainnet"; service_name: string; address: string; maximum_lifetime_ms: number; vpn_ms_per_zat: number; service_key: string}
 export interface Terms {funded: number; open_ms: number; lifetime: "Days3" | "Days7" | "Days30"; open_height: number; return_address: string}
 interface Envelope {tab_id: string; k: number; previous: string | null; body: Record<string, unknown>}
 interface Funding {address: string; amount_zat: number; amount: string; uri: string}
@@ -55,7 +55,7 @@ export class Opening {
     const wasm = this.wasm;
     if (!wasm || !this.id) throw new Error("Protect this tab first.");
     const offer = await getOffer();
-    if (offer.network !== "Testnet") throw new Error("This page accepts testnet only.");
+    if (offer.network !== "Testnet" && offer.network !== "Mainnet") throw new Error("This service is on an unknown network.");
     const height = wasm.latest_height(await relay("GetLatestBlock", wasm.latest_request()));
     const terms: Terms = {...input, open_ms: Date.now(), open_height: Number(height)};
     const payer = this.session.current();
@@ -64,7 +64,7 @@ export class Opening {
     const keys = await this.exchange({step: "begin", offer, terms, round_one: first});
     if (keys.step !== "keys") throw new Error("The service returned the wrong setup step.");
     const second = JSON.parse(payer.advance(JSON.stringify(keys.round_one))) as unknown;
-    payer.finish_keys(JSON.stringify(keys.round_two));
+    payer.finish_keys(JSON.stringify(keys.round_two), offer.network);
     const seal = await this.exchange({step: "keys", round_two: second});
     if (seal.step !== "seal" || typeof seal.commitment !== "string") throw new Error("The service did not send its sealed key.");
     progress("Checking the service's sealed key.");

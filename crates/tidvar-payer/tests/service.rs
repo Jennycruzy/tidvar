@@ -45,7 +45,7 @@ fn separate_service_saves_only_its_own_share_after_both_signatures()
     let (p, p1) = Setup::begin(&mut OsRng)?;
     let (s, s1, s2) = opening::Setup::begin(offer.clone(), terms.clone(), p1, &mut OsRng)?;
     let (p, p2) = p.advance(s1)?;
-    let p = p.finish(s2)?;
+    let p = p.finish(s2, tidvar_core::record::Network::Testnet)?;
     let mut s = s.finish(p2, &mut OsRng)?;
     let sealed = s.sealed().clone();
     let (p, challenge) = p.accept(

@@ -10,6 +10,8 @@ pub const IOU_INTERVAL_MS: u64 = 10_000;
 pub const VISIBLE_ADVANCE_MS: u64 = 20_000;
 pub const AWAY_ADVANCE_MS: u64 = 3_600_000;
 pub const CUT_GRACE_MS: u64 = 5_000;
+/// One chat answer: 1,000 zatoshi (about one cent).
+pub const CHAT_PRICE: u64 = 1_000;
 pub const VPN_UNIT_MS: u64 = 6_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]

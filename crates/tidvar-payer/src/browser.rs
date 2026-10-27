@@ -73,7 +73,12 @@ impl BrowserPayer {
         self.state = State::Second(Box::new(second));
         json(&message)
     }
-    pub fn finish_keys(&mut self, peer: &str) -> Result<String, JsValue> {
+    pub fn finish_keys(&mut self, peer: &str, network: &str) -> Result<String, JsValue> {
+        let network = match network {
+            "Mainnet" => tidvar_core::record::Network::Mainnet,
+            "Testnet" => tidvar_core::record::Network::Testnet,
+            _ => return Err(JsValue::from_str("This service is on an unknown network.")),
+        };
         let peer = parse(peer)?;
         if !matches!(self.state, State::Second(_)) {
             return Err(wrong_state());
@@ -81,7 +86,7 @@ impl BrowserPayer {
         let State::Second(second) = std::mem::replace(&mut self.state, State::Failed) else {
             return Err(wrong_state());
         };
-        let unsealed = second.finish(peer).map_err(error)?;
+        let unsealed = second.finish(peer, network).map_err(error)?;
         let public = json(unsealed.public_keys())?;
         self.state = State::Unsealed(Box::new(unsealed));
         Ok(public)

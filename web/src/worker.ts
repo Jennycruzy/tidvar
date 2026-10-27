@@ -47,6 +47,7 @@ host.onmessage = async event => {
       host.postMessage({observation:{step:"sync",elapsedMs:performance.now()-started,heapBytes:memory,wasmBytes:wasm?.decodedBodySize ?? null}});
     }
     else if (type === "pay") result = {payment: await current().pay(Boolean(value), chain) ?? null, meter: meter()};
+    else if (type === "chat") result = {...await current().chat(String(value), chain), meter: meter()};
     else if (type === "vpn") result = {reply: await current().vpn(value as Parameters<Tab["vpn"]>[0]), meter: meter()};
     else if (type === "close") result={reply:await current().close(chain),meter:meter()};
     else if (type === "close_status") result={reply:await current().closeStatus(),meter:meter()};

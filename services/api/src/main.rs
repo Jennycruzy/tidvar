@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
+mod chat;
 mod close;
+mod force;
 mod opening;
 mod payments;
 mod vpn;
@@ -23,7 +25,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use tidvar_chain::native::{Client, TESTNET_SERVER};
+use tidvar_chain::native::{Client, server};
 use tidvar_core::{
     encoding::MAX_MESSAGE_BYTES,
     record::{Network, Offer},
@@ -41,6 +43,7 @@ pub struct App {
     store: Arc<Mutex<Store>>,
     exchanges: Arc<Mutex<opening::Exchanges>>,
     work: Arc<Semaphore>,
+    chat: Arc<Semaphore>,
     limits: Arc<Mutex<BTreeMap<IpAddr, Limits>>>,
     web: Arc<PathBuf>,
     proofs: Arc<tidvar_payee::proof::Proofs>,
@@ -205,15 +208,23 @@ fn identity(path: &Path) -> anyhow::Result<SigningKey<SpendAuth>> {
 }
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let network = Network::from_name(
+        &std::env::var("TIDVAR_NETWORK").unwrap_or_else(|_| "testnet".to_owned()),
+    )
+    .ok_or_else(|| anyhow::anyhow!("TIDVAR_NETWORK must be mainnet or testnet."))?;
+    let name = match network {
+        Network::Mainnet => "mainnet",
+        Network::Testnet => "testnet",
+    };
     let address = std::env::var("TIDVAR_SERVICE_ADDRESS")?;
     let key_path = PathBuf::from(
         std::env::var("TIDVAR_SERVICE_KEY")
-            .unwrap_or_else(|_| "/root/tidvar-private/keys/service-testnet.key".to_owned()),
+            .unwrap_or_else(|_| format!("/root/tidvar-private/keys/service-{name}.key")),
     );
     let identity = identity(&key_path)?;
     let published = Offer {
         version: 1,
-        network: Network::Testnet,
+        network,
         service_name: "Tidvar VPN".to_owned(),
         address,
         maximum_lifetime_ms: 30 * 86_400_000,
@@ -227,7 +238,7 @@ async fn main() -> anyhow::Result<()> {
     fs::create_dir_all(&data)?;
     fs::set_permissions(&data, fs::Permissions::from_mode(0o700))?;
     let store = Store::open(&data.join("payee.sqlite"))?;
-    let chain = Client::connect(TESTNET_SERVER).await?;
+    let chain = Client::connect_to(server(network), network).await?;
     let web = PathBuf::from(
         std::env::var("TIDVAR_WEB_ROOT").unwrap_or_else(|_| "/root/tidvar/web/dist".to_owned()),
     );
@@ -239,11 +250,24 @@ async fn main() -> anyhow::Result<()> {
         store: Arc::new(Mutex::new(store)),
         exchanges: Arc::new(Mutex::new(opening::Exchanges::default())),
         work: Arc::new(Semaphore::new(1)),
+        chat: Arc::new(Semaphore::new(1)),
         limits: Arc::new(Mutex::new(BTreeMap::new())),
         web: Arc::new(web),
         proofs: Arc::new(tidvar_payee::proof::Proofs::build()),
         payments: Arc::new(Mutex::new(BTreeMap::new())),
     };
+    let mut arguments = std::env::args().skip(1);
+    if arguments.next().as_deref() == Some("force-close") {
+        let id: [u8; 32] = hex::decode(arguments.next().unwrap_or_default())?
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Give the 64-character tab id."))?;
+        let reply = force::force_close(&app, id)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.1))?;
+        println!("{reply}");
+        return Ok(());
+    }
+    tokio::spawn(force::watch_deadlines(app.clone()));
     let router = Router::new()
         .route("/v1/offer", get(offer))
         .route("/v1/tabs", post(opening::handle))
@@ -251,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/tabs/{id}/iou", post(payments::iou))
         .route("/v1/tabs/{id}/vpn", post(vpn::handle))
         .route("/v1/tabs/{id}/close", post(close::handle))
+        .route("/v1/tabs/{id}/chat", post(chat::handle))
         .route("/v1/lwd", post(relay))
         .fallback(files)
         .layer(DefaultBodyLimit::max(MAX_MESSAGE_BYTES))
@@ -262,7 +287,7 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("The API must listen on loopback.");
     }
     let listener = tokio::net::TcpListener::bind(listen).await?;
-    eprintln!("Tidvar TESTNET API ready.");
+    eprintln!("Tidvar {name} API ready.");
     axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),

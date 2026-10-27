@@ -10,7 +10,7 @@ use reddsa::{Signature, SigningKey, VerificationKey, orchard::SpendAuth};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zcash_address::unified::{self, Container, Encoding};
-use zcash_protocol::consensus::NetworkType;
+use zcash_protocol::consensus::{self, BlockHeight, BranchId, NetworkType};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Network {
@@ -22,6 +22,40 @@ impl Network {
         match self {
             Self::Mainnet => NetworkType::Main,
             Self::Testnet => NetworkType::Test,
+        }
+    }
+    pub fn consensus(self) -> consensus::Network {
+        match self {
+            Self::Mainnet => consensus::Network::MainNetwork,
+            Self::Testnet => consensus::Network::TestNetwork,
+        }
+    }
+    /// The lightwalletd chain name for this network.
+    pub fn chain_name(self) -> &'static str {
+        match self {
+            Self::Mainnet => "main",
+            Self::Testnet => "test",
+        }
+    }
+    /// SLIP-44 coin type used in PCZTs.
+    pub fn coin_type(self) -> u32 {
+        match self {
+            Self::Mainnet => 133,
+            Self::Testnet => 1,
+        }
+    }
+    /// The consensus branch at `height` when it carries Ironwood (NU6.3 or later).
+    pub fn ironwood_branch(self, height: u32) -> Option<BranchId> {
+        match BranchId::for_height(&self.consensus(), BlockHeight::from_u32(height)) {
+            branch @ (BranchId::Nu6_3 | BranchId::Nu7) => Some(branch),
+            _ => None,
+        }
+    }
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "mainnet" | "main" => Some(Self::Mainnet),
+            "testnet" | "test" => Some(Self::Testnet),
+            _ => None,
         }
     }
     fn byte(self) -> u8 {
@@ -372,5 +406,38 @@ impl SignedRecord {
         let hash = self.body.hash()?;
         verify(self.body.offer.service_key, &self.service_signature, &hash)?;
         verify(self.body.payer_record_key, &self.payer_signature, &hash)
+    }
+}
+
+#[cfg(test)]
+mod network_tests {
+    use super::*;
+
+    #[test]
+    fn each_network_signs_for_its_own_ironwood_branch() {
+        // Mainnet: Ironwood from NU6.3 (block 3,428,143); NU7 not yet scheduled.
+        assert_eq!(Network::Mainnet.ironwood_branch(3_428_142), None);
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_428_143),
+            Some(BranchId::Nu6_3)
+        );
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_600_000),
+            Some(BranchId::Nu6_3)
+        );
+        // Testnet already runs NU7 (block 4,465,026).
+        assert_eq!(
+            Network::Testnet.ironwood_branch(4_465_025),
+            Some(BranchId::Nu6_3)
+        );
+        assert_eq!(
+            Network::Testnet.ironwood_branch(4_465_026),
+            Some(BranchId::Nu7)
+        );
+        assert_eq!(Network::Mainnet.coin_type(), 133);
+        assert_eq!(Network::Testnet.coin_type(), 1);
+        assert_eq!(Network::from_name("mainnet"), Some(Network::Mainnet));
+        assert_eq!(Network::from_name("test"), Some(Network::Testnet));
+        assert_eq!(Network::from_name("regtest"), None);
     }
 }

@@ -74,6 +74,78 @@ impl Store {
         }
         Ok(())
     }
+    /// Tabs past their closing deadline that hold a payment and have no close yet.
+    pub fn forced_close_due(&self, now_ms: u64) -> Result<Vec<[u8; 32]>, PayeeError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT t.id,t.record FROM tabs t JOIN balances b ON b.tab_id=t.id
+                 WHERE b.newest IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cooperative_closes c WHERE c.tab_id=t.id)",
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })
+            .map_err(|_| PayeeError::Storage)?;
+        let mut due = Vec::new();
+        for row in rows {
+            let (id, record) = row.map_err(|_| PayeeError::Storage)?;
+            let record: tidvar_core::record::SignedRecord =
+                serde_json::from_slice(&record).map_err(|_| PayeeError::Storage)?;
+            if record.body.close_ms <= now_ms {
+                due.push(id.try_into().map_err(|_| PayeeError::Storage)?);
+            }
+        }
+        Ok(due)
+    }
+    /// Forced close: completes the service's half of the newest IOU, which the payer already
+    /// signed, so it can be published without the payer. The ledger is frozen first, so no
+    /// later payment can replace it.
+    pub fn sign_forced<R: RngCore + CryptoRng>(
+        &mut self,
+        id: &[u8; 32],
+        notes: &[FundingNote],
+        context: TransactionContext,
+        now_ms: u64,
+        rng: &mut R,
+    ) -> Result<(Checked, Request), PayeeError> {
+        let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
+        if context.kind != iou::Kind::Payment {
+            return Err(PayeeError::Terms);
+        }
+        self.close_ledger(id, now_ms)?;
+        let request = self.newest_iou(id)?.ok_or(PayeeError::Terms)?;
+        let pczt = pczt::Pczt::parse(&request.pczt).map_err(|_| PayeeError::Proof)?;
+        let mut checked = iou::check(pczt, &tab.record, notes, request.amount, context, rng)?;
+        if checked.spends.len() != request.messages.len()
+            || checked.spends.len() != request.shares.len()
+        {
+            return Err(PayeeError::Nonce);
+        }
+        let mut signer = pczt::roles::signer::Signer::new(checked.pczt.clone())
+            .map_err(|_| PayeeError::Proof)?;
+        for ((spend, message), payer) in checked
+            .spends
+            .iter()
+            .zip(&request.messages)
+            .zip(&request.shares)
+        {
+            if message.sighash != checked.sighash || message.alpha != spend.alpha {
+                return Err(PayeeError::Nonce);
+            }
+            let service = self.complete_nonce(id, message, payer)?;
+            let signature = frost::aggregate(&tab.keys, message, payer, &service)?;
+            signer
+                .apply_ironwood_signature(
+                    spend.index,
+                    orchard::primitives::redpallas::Signature::from(signature),
+                )
+                .map_err(|_| PayeeError::Proof)?;
+        }
+        checked.pczt = signer.finish();
+        Ok((checked, request))
+    }
     pub fn sign_close<R: RngCore + CryptoRng>(
         &mut self,
         id: &[u8; 32],

@@ -11,8 +11,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tidvar_core::transport::Authenticated;
 use tidvar_payee::PayeeError;
 
-const CONFIGURATION: &str = "/root/tidvar-data/vpn.json";
-
 #[derive(Deserialize)]
 #[serde(tag = "step", rename_all = "snake_case", deny_unknown_fields)]
 enum Action {
@@ -44,7 +42,11 @@ fn failure(error: PayeeError) -> Failure {
     }
 }
 fn server() -> Result<serde_json::Value, Failure> {
-    let bytes = std::fs::read(CONFIGURATION).map_err(|_| {
+    let configuration = std::path::Path::new(
+        &std::env::var("TIDVAR_DATA_DIR").unwrap_or_else(|_| "/root/tidvar-data".to_owned()),
+    )
+    .join("vpn.json");
+    let bytes = std::fs::read(configuration).map_err(|_| {
         Failure(
             StatusCode::SERVICE_UNAVAILABLE,
             "The VPN is starting. Keep this page open and retry.",

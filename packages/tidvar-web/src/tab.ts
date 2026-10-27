@@ -1,15 +1,21 @@
 import {Opening,relay} from "./opening.js";
 import {loadWasm} from "./wasm.js";
 interface Commitment {id: string; data: string}
-export interface Balance {paid: number; used: number; vpn_ms: number; running: boolean; paused: boolean; closing: boolean; paid_until_ms: number | null; cut_at_ms: number | null}
+export interface Balance {paid: number; used: number; vpn_ms: number; chat_zat?: number; running: boolean; paused: boolean; closing: boolean; paid_until_ms: number | null; cut_at_ms: number | null}
 interface Envelope {tab_id: string; k: number; previous: string | null; body: Record<string, unknown>}
 interface Authenticated {message: Envelope; signature: string}
 export interface PaymentEvent {hidden: boolean; amount: number; anchor: number; buildAndSignMs: number; deliveryMs: number; completedAt: number}
+/** One chat answer, in zatoshi. */
+export const CHAT_PRICE = 1000;
+/** VPN time prepaid with a chat payment so the VPN stays up while the model answers (16 zat = 96 s). */
+const CHAT_VPN_MARGIN = 16;
 export class Tab {
   private pool: Commitment[] = [];
   private tree?: {height: bigint; bytes: Uint8Array<ArrayBuffer>};
   private refreshedAt = 0;
   private balance?: Balance;
+  private prompt?: string;
+  private answer: string | null = null;
   constructor(readonly opening: Opening, readonly id: string) {}
   private async deliver(): Promise<Record<string, unknown> | undefined> {
     const payer=this.opening.session.current();
@@ -27,9 +33,17 @@ export class Tab {
       response=await fetch("/v1/tabs/"+this.id+"/vpn",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
     }else if(typeof step==="string" && step.startsWith("close_")){
       response=await fetch("/v1/tabs/"+this.id+"/close",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(pending)});
+    }else if(step==="chat"){
+      // A chat request left pending is settled without its message: never charged.
+      response=await fetch("/v1/tabs/"+this.id+"/chat",{...options,method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({request:pending,prompt:this.prompt??null})});
     }else{throw new Error("This saved request cannot be sent by the payment loop.");}
     if(!response.headers.get("content-type")?.includes("application/json"))throw new Error("The connection was interrupted. Keep this page open; the same request will be retried.");
-    const text=await response.text();
+    let text=await response.text();
+    if(step==="chat" && response.ok){
+      const wrapped=JSON.parse(text) as {reply: unknown; answer: string | null};
+      this.answer=wrapped.answer;
+      text=JSON.stringify(wrapped.reply);
+    }
     if(!response.ok){
       const value=JSON.parse(text) as {error?:unknown};
       throw new Error(typeof value.error==="string"?value.error:"The service could not finish this request. Keep this page open and retry.");
@@ -39,7 +53,7 @@ export class Tab {
     if(reply.step==="refused")throw new Error(typeof reply.error==="string"?reply.error:"The service refused this payment. Keep your backup and retry.");
     if(reply.step==="nonces"){this.pool=reply.commitments as Commitment[];this.balance=reply.balance as Balance;}
     if(reply.step==="accepted")this.balance=(reply.receipt as {balance:Balance}).balance;
-    if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_")) && reply.balance)this.balance=reply.balance as Balance;
+    if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_") || reply.step.startsWith("chat_")) && reply.balance)this.balance=reply.balance as Balance;
     return reply;
   }
   async retry(): Promise<Record<string,unknown> | undefined> {return await this.deliver();}
@@ -108,7 +122,25 @@ export class Tab {
       this.refreshedAt=Date.now();
     }
   }
-  async pay(hidden: boolean, progress: (height:bigint,value:bigint)=>void): Promise<PaymentEvent | undefined> {
+  /** Pays for one chat answer (plus VPN time to cover the wait), then asks the service's model. */
+  async chat(prompt: string, progress: (height:bigint,value:bigint)=>void): Promise<{answer: string; balance: Balance | undefined}> {
+    const text=prompt.trim();
+    if(!text || [...text].length>2000)throw new Error("Write a message of at most 2,000 characters.");
+    await this.deliver();
+    await this.pay(false,progress,CHAT_PRICE+CHAT_VPN_MARGIN);
+    const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text)));
+    const hash=[...digest].map(b=>b.toString(16).padStart(2,"0")).join("");
+    this.opening.session.current().prepare_request(JSON.stringify({step:"chat",prompt_sha256:hash,price:CHAT_PRICE}));
+    await this.opening.session.save(this.id);
+    this.prompt=text;this.answer=null;
+    let reply: Record<string,unknown> | undefined;
+    try{reply=await this.deliver();}finally{this.prompt=undefined;}
+    const answer=this.answer;this.answer=null;
+    if(reply?.step==="chat_refused")throw new Error(typeof reply.error==="string"?reply.error:"The message was not charged.");
+    if(reply?.step!=="chat_answered" || typeof answer!=="string")throw new Error("The answer was not received. Keep this page open and retry.");
+    return {answer,balance:this.balance};
+  }
+  async pay(hidden: boolean, progress: (height:bigint,value:bigint)=>void, extra = 0): Promise<PaymentEvent | undefined> {
     await this.deliver();
     const payer=this.opening.session.current();
     const balance=JSON.parse(payer.authorization_balance(BigInt(Date.now()))) as Balance;
@@ -117,7 +149,8 @@ export class Tab {
     if(!hidden)await this.nonces();
     const used=this.balance?.used ?? 0;
     if(!Number.isSafeInteger(used) || used<0)throw new Error("The service returned an invalid usage amount.");
-    const amount=payer.payment_target(BigInt(Date.now()),hidden,BigInt(used));
+    let amount=payer.payment_target(BigInt(Date.now()),hidden,BigInt(used));
+    if(extra>0 && BigInt(used+extra)>amount)amount=BigInt(used+extra);
     if(amount<=payer.signed_amount())return;
     const count=payer.funding_note_count();
     if(count<1 || count>4)throw new Error("Wait for your funding payment to be confirmed.");

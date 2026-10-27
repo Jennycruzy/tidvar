@@ -6,18 +6,36 @@ use crate::{
 };
 use prost::Message;
 use std::{collections::BTreeSet, io::Cursor, time::Duration};
+use tidvar_core::record::Network;
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use zcash_primitives::transaction::Transaction;
-use zcash_protocol::consensus::BranchId;
 
 pub const TESTNET_SERVER: &str = "https://testnet.zec.rocks:443";
+pub const MAINNET_SERVER: &str = "https://zec.rocks:443";
+pub fn server(network: Network) -> &'static str {
+    match network {
+        Network::Mainnet => MAINNET_SERVER,
+        Network::Testnet => TESTNET_SERVER,
+    }
+}
+/// The consensus branch id lightwalletd reports for the current tip.
+fn expected_branch(network: Network) -> &'static [&'static str] {
+    match network {
+        Network::Mainnet => &["37a5165b", "77190ad9"],
+        Network::Testnet => &["77190ad9"],
+    }
+}
 
 #[derive(Clone)]
 pub struct Client {
     inner: CompactTxStreamerClient<Channel>,
+    network: Network,
 }
 impl Client {
     pub async fn connect(server: &str) -> Result<Self, ChainError> {
+        Self::connect_to(server, Network::Testnet).await
+    }
+    pub async fn connect_to(server: &str, network: Network) -> Result<Self, ChainError> {
         if !server.starts_with("https://") {
             return Err(ChainError::Network);
         }
@@ -33,6 +51,7 @@ impl Client {
             .map_err(|_| ChainError::Unavailable)?;
         let mut client = Self {
             inner: CompactTxStreamerClient::new(channel).max_decoding_message_size(8 * 1024 * 1024),
+            network,
         };
         client.info().await?;
         Ok(client)
@@ -44,7 +63,9 @@ impl Client {
             .await
             .map_err(|_| ChainError::Unavailable)?
             .into_inner();
-        if info.chain_name != "test" || info.consensus_branch_id != "77190ad9" {
+        if info.chain_name != self.network.chain_name()
+            || !expected_branch(self.network).contains(&info.consensus_branch_id.as_str())
+        {
             return Err(ChainError::Network);
         }
         Ok(info)
@@ -66,7 +87,7 @@ impl Client {
             .await
             .map_err(|_| ChainError::Unavailable)?
             .into_inner();
-        if tree.network != "test" || tree.height != height {
+        if tree.network != self.network.chain_name() || tree.height != height {
             return Err(ChainError::Network);
         }
         Ok(tree)
@@ -143,7 +164,7 @@ impl Client {
     pub async fn broadcast(&mut self, raw: Vec<u8>) -> Result<String, ChainError> {
         self.info().await?;
         let tip = self.latest().await?;
-        let txid = validate_broadcast(&raw, tip.height)?;
+        let txid = validate_on(&raw, tip.height, self.network)?;
         let result = self
             .inner
             .send_transaction(service::RawTransaction {
@@ -223,14 +244,17 @@ impl Client {
 }
 
 pub fn validate_broadcast(raw: &[u8], tip: u64) -> Result<String, ChainError> {
+    validate_on(raw, tip, Network::Testnet)
+}
+pub fn validate_on(raw: &[u8], tip: u64, network: Network) -> Result<String, ChainError> {
+    let next = u32::try_from(tip.saturating_add(1)).map_err(|_| ChainError::Message)?;
+    let branch = network.ironwood_branch(next).ok_or(ChainError::Network)?;
     let mut cursor = Cursor::new(raw);
-    let transaction =
-        Transaction::read(&mut cursor, BranchId::Nu7).map_err(|_| ChainError::Message)?;
+    let transaction = Transaction::read(&mut cursor, branch).map_err(|_| ChainError::Message)?;
     if cursor.position() != raw.len() as u64 {
         return Err(ChainError::Message);
     }
-    if transaction.consensus_branch_id() != BranchId::Nu7
-        || !transaction.version().valid_in_branch(BranchId::Nu7)
+    if transaction.consensus_branch_id() != branch || !transaction.version().valid_in_branch(branch)
     {
         return Err(ChainError::Network);
     }

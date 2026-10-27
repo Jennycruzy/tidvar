@@ -3,7 +3,7 @@ export interface Payer {
   backup_key(): Uint8Array;
   begin(): string;
   advance(peer: string): string;
-  finish_keys(peer: string): string;
+  finish_keys(peer: string, network: string): string;
   accept_seal(sealed: string, commitment: Uint8Array, round: bigint): string;
   verify_seal(openings: string): string;
   record_body(offer: string, terms: string): string;

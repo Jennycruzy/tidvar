@@ -40,7 +40,7 @@ fn failure(error: PayeeError) -> Failure {
         _ => Failure::bad(),
     }
 }
-async fn publish(
+pub(crate) async fn publish(
     app: &App,
     client: &mut Client,
     id: &[u8; 32],

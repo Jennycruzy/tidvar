@@ -8,7 +8,6 @@ use tidvar_seal::{
     quicknet_public_key, round_at,
     seal::{Challenge, Opening, SealedKey, SecretSeal},
 };
-use zcash_protocol::consensus::NetworkType;
 
 pub struct Setup {
     second: SecondRound,
@@ -36,9 +35,6 @@ impl Setup {
         rng: &mut R,
     ) -> Result<(Self, RoundOne, RoundTwo), PayeeError> {
         terms.validate(&offer)?;
-        if offer.network != tidvar_core::record::Network::Testnet {
-            return Err(PayeeError::Terms);
-        }
         let (first, round_one) = FirstRound::begin(Role::Service, rng)?;
         let (second, round_two) = first.advance(peer)?;
         Ok((
@@ -56,7 +52,7 @@ impl Setup {
         peer: RoundTwo,
         rng: &mut R,
     ) -> Result<Sealed, PayeeError> {
-        let keys = self.second.finish(peer, NetworkType::Test)?;
+        let keys = self.second.finish(peer, self.offer.network.kind())?;
         let deadline = self.terms.validate(&self.offer)?;
         let round = round_at(deadline.refund_ms / 1000)?;
         let secret =

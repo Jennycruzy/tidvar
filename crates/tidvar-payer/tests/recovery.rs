@@ -15,7 +15,7 @@ fn complete_setup_and_recovery_keep_keys_seal_and_consumed_nonces()
     let (service, s1) = FirstRound::begin(Role::Service, &mut OsRng)?;
     let (payer, p2) = payer.advance(s1)?;
     let (service, s2) = service.advance(p1)?;
-    let payer = payer.finish(s2)?;
+    let payer = payer.finish(s2, tidvar_core::record::Network::Testnet)?;
     let service = service.finish(p2, NetworkType::Test)?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?

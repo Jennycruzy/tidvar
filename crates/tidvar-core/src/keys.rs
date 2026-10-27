@@ -359,6 +359,24 @@ mod tests {
     use zcash_address::unified::Container;
 
     #[test]
+    fn mainnet_parties_derive_the_same_mainnet_receiver() -> Result<(), KeyError> {
+        let (p, p1) = FirstRound::begin(Role::Payer, &mut OsRng)?;
+        let (s, s1) = FirstRound::begin(Role::Service, &mut OsRng)?;
+        let (p, p2) = p.advance(s1)?;
+        let (s, s2) = s.advance(p1)?;
+        let p = p.finish(s2, NetworkType::Main)?;
+        let s = s.finish(p2, NetworkType::Main)?;
+        assert_eq!(p.public.address, s.public.address);
+        assert!(p.public.address.starts_with("u1"));
+        crate::record::receiver(&p.public.address, crate::record::Network::Mainnet)
+            .map_err(|_| KeyError::Group)?;
+        assert!(
+            crate::record::receiver(&p.public.address, crate::record::Network::Testnet).is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn two_independent_parties_derive_the_same_even_key_and_receiver() -> Result<(), KeyError> {
         let (p, p1) = FirstRound::begin(Role::Payer, &mut OsRng)?;
         let (s, s1) = FirstRound::begin(Role::Service, &mut OsRng)?;
