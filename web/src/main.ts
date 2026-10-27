@@ -58,7 +58,9 @@ let polling = false;
 let closing = localStorage.getItem("tidvar-closing-"+localStorage.getItem("tidvar-current-tab"))==="yes";
 let closeTimer:number|undefined;
 let stopped=localStorage.getItem("tidvar-stopped-"+localStorage.getItem("tidvar-current-tab"))==="yes";
-let cutoffMode=localStorage.getItem("tidvar-cutoff-"+localStorage.getItem("tidvar-current-tab"))==="yes";
+const cutoffRequested=new URLSearchParams(location.search).get("cutoff")==="1";
+let cutoffMode=cutoffRequested || localStorage.getItem("tidvar-cutoff-"+localStorage.getItem("tidvar-current-tab"))==="yes";
+if(cutoffRequested){const url=new URL(location.href);url.searchParams.delete("cutoff");history.replaceState(null,"",url.pathname+url.search+url.hash);}
 let closeMined=false;
 function setCutoffMode(active:boolean):void{
   cutoffMode=active;
@@ -84,6 +86,7 @@ element<HTMLFormElement>("setup").onsubmit = async event => {
     const result = await call("open", {funded, lifetime: element<HTMLSelectElement>("lifetime").value, return_address: element<HTMLInputElement>("return-address").value.trim()}) as {id: string; backup: unknown; funding: typeof funding};
     funding = result.funding;if (!funding) throw new Error("The payment request was not returned.");
     localStorage.setItem("tidvar-current-tab", result.id);
+    if(cutoffMode)setCutoffMode(true);
     void sampleClock();
     backupUrl = URL.createObjectURL(new Blob([JSON.stringify(result.backup)], {type: "application/json"}));
     element<HTMLAnchorElement>("backup").href = backupUrl;
