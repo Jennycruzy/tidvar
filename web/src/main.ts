@@ -149,9 +149,11 @@ async function payOnce(hidden: boolean): Promise<void> {
     const result = await call("pay", hidden) as {payment: {amount: number; buildAndSignMs: number; deliveryMs: number} | null; meter: Meter};
     showMeter(result.meter);
     if(result.payment)observe("payment_accepted",{...result.payment,hidden});
+    if(result.payment && hidden)awayPaid=true;
     if (result.payment) element("pay-status").textContent = `Paid ${result.payment.amount} zat in total. Signed in ${Math.round(result.payment.buildAndSignMs)} ms, accepted in ${Math.round(result.payment.deliveryMs)} ms.`;
   } catch (failure) {element("pay-status").textContent = failure instanceof Error ? failure.message : "The payment could not be sent. Retrying.";}
 }
+let awayPaid = false;
 function schedule(): void {
   if(closing || stopped)return;
   if (loop) window.clearTimeout(loop);
@@ -159,8 +161,8 @@ function schedule(): void {
     loop = undefined;
     observe("timer");
     if (!stopped && document.visibilityState === "visible") await payOnce(false);
-    // A hidden page whose visibilitychange was missed still pays away time once; repeats sign nothing new.
-    else if (!stopped && !cutoffMode) await payOnce(true);
+    // A hidden page whose visibilitychange was missed still pays its away time, once per hide.
+    else if (!stopped && !cutoffMode && !awayPaid) await payOnce(true);
     schedule();
   }, 10000);
 }
@@ -173,6 +175,7 @@ function startVpn(): void {
 }
 document.addEventListener("visibilitychange", () => {
   observe("visibility");
+  if (document.visibilityState === "visible") awayPaid = false;
   if (closing || stopped || !paying) return;
   if (document.visibilityState === "hidden" && cutoffMode){observe("cutoff_away_skipped");return;}
   if (document.visibilityState === "hidden") void payOnce(true);
