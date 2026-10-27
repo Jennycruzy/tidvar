@@ -202,6 +202,30 @@ pub fn build<R: RngCore + CryptoRng>(
     )
 }
 
+/// The refund: spends the tab's notes back to the payer's return address, signed with both
+/// shares the payer now holds. The result still needs its proofs before broadcast.
+pub fn refund<R: RngCore + CryptoRng>(
+    record: &SignedRecord,
+    notes: &[FundingNote],
+    target: u32,
+    payer: &crate::keys::Keys,
+    service: &crate::keys::Keys,
+    rng: &mut R,
+) -> Result<Pczt, IouError> {
+    let checked = build(record, notes, Amount::ZERO, target, Kind::Cooperative, rng)?;
+    let mut signer = Signer::new(checked.pczt).map_err(|_| IouError::Transaction)?;
+    for spend in &checked.spends {
+        let signature = crate::frost::sign_alone(payer, service, checked.sighash, spend.alpha, rng)
+            .map_err(|_| IouError::Transaction)?;
+        signer
+            .apply_ironwood_signature(
+                spend.index,
+                orchard::primitives::redpallas::Signature::from(signature),
+            )
+            .map_err(|_| IouError::Transaction)?;
+    }
+    Ok(signer.finish())
+}
 pub struct TransactionContext {
     pub target: u32,
     pub kind: Kind,

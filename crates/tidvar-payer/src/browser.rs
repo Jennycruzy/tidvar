@@ -336,6 +336,14 @@ impl BrowserPayer {
 
 #[wasm_bindgen]
 impl BrowserPayer {
+    /// The signed refund (a PCZT without proofs), once drand has published the refund round.
+    pub fn refund_transaction(&self, info: &str, beacon: &str) -> Result<Vec<u8>, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        let beacon = tidvar_seal::verify_beacon_json(info, beacon).map_err(error)?;
+        payer.refund_transaction(&beacon).map_err(error)
+    }
     pub fn prepare_request(&mut self, body: &str) -> Result<String, JsValue> {
         let State::Ready(payer) = &mut self.state else {
             return Err(wrong_state());

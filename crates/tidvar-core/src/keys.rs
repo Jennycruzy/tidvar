@@ -252,6 +252,36 @@ impl SecondRound {
 }
 
 impl Keys {
+    /// Rebuilds the service's key package from the share the time seal released; refused
+    /// unless the share matches the service's public verifying share.
+    pub fn from_service_share(
+        share: &[u8; 32],
+        public: &[u8],
+        viewing_key: &[u8],
+        network: NetworkType,
+    ) -> Result<Self, KeyError> {
+        let public_package =
+            frost::keys::PublicKeyPackage::deserialize(public).map_err(|_| KeyError::Message)?;
+        let id = Role::Service.identifier()?;
+        let signing = frost::keys::SigningShare::deserialize(share.as_slice())
+            .map_err(|_| KeyError::Group)?;
+        let verifying = *public_package
+            .verifying_shares()
+            .get(&id)
+            .ok_or(KeyError::Group)?;
+        if frost::keys::VerifyingShare::from(signing) != verifying {
+            return Err(KeyError::Group);
+        }
+        let package = frost::keys::KeyPackage::new(
+            id,
+            signing,
+            verifying,
+            *public_package.verifying_key(),
+            2,
+        );
+        let secret = Zeroizing::new(package.serialize().map_err(|_| KeyError::Message)?);
+        Self::restore(Role::Service, &secret, public, viewing_key, network)
+    }
     pub fn restore(
         role: Role,
         secret: &[u8],

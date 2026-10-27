@@ -571,6 +571,38 @@ impl Default for Channel {
     }
 }
 impl Payer {
+    /// After the refund time: opens the service's sealed share with the public drand beacon
+    /// and signs the refund alone. Returns the signed PCZT; it holds no secrets and only
+    /// needs its proofs before broadcast.
+    pub fn refund_transaction(
+        &self,
+        beacon: &tidvar_seal::VerifiedBeacon,
+    ) -> Result<Vec<u8>, PayerError> {
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
+        if beacon.round() != record.body.refund_round {
+            return Err(PayerError::Seal(SealError::Beacon));
+        }
+        let share = self.seal.open(beacon)?;
+        let service = Keys::from_service_share(
+            &share,
+            &self.keys.public_bytes()?,
+            &self.keys.public.viewing_key,
+            record.body.offer.network.kind(),
+        )?;
+        let notes = sync.funding_notes()?;
+        let target =
+            u32::try_from(sync.height.saturating_add(1)).map_err(|_| PayerError::Backup)?;
+        let pczt = tidvar_core::iou::refund(
+            record,
+            &notes,
+            target,
+            &self.keys,
+            &service,
+            &mut rand_core::OsRng,
+        )?;
+        pczt.serialize().map_err(|_| PayerError::Backup)
+    }
     pub fn prepare_request(
         &mut self,
         root: &Root,

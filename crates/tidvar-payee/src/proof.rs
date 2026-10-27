@@ -22,7 +22,15 @@ impl Proofs {
         checked: Checked,
         rng: &mut R,
     ) -> Result<Pczt, PayeeError> {
-        let pczt = Prover::new(checked.pczt)
+        self.prove_pczt(checked.pczt, rng)
+    }
+    /// Proves any signed Ironwood PCZT (for example a payer's refund) and verifies the proof.
+    pub fn prove_pczt<R: RngCore + CryptoRng>(
+        &self,
+        pczt: Pczt,
+        rng: &mut R,
+    ) -> Result<Pczt, PayeeError> {
+        let pczt = Prover::new(pczt)
             .create_ironwood_proof(Random(rng), &self.proving)
             .map_err(|_| PayeeError::Proof)?
             .finish();

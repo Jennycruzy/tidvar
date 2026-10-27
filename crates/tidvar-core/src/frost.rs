@@ -224,6 +224,30 @@ pub fn verify_share(keys: &Keys, message: &Message, share: &Share) -> Result<(),
     )
     .map_err(|_| SigningError::Share)
 }
+/// Signs with both key packages held by one party. Used only for the refund, after the
+/// time seal has released the service's share to the payer.
+pub fn sign_alone<R: RngCore + CryptoRng>(
+    payer: &Keys,
+    service: &Keys,
+    sighash: [u8; 32],
+    alpha: [u8; 32],
+    rng: &mut R,
+) -> Result<[u8; 64], SigningError> {
+    if payer.role != Role::Payer || service.role != Role::Service {
+        return Err(SigningError::Share);
+    }
+    let first = Nonce::generate(payer, rng)?;
+    let second = Nonce::generate(service, rng)?;
+    let message = Message {
+        sighash,
+        alpha,
+        payer: first.public().clone(),
+        service: second.public().clone(),
+    };
+    let payer_share = first.sign(payer, &message)?;
+    let service_share = second.sign(service, &message)?;
+    aggregate(payer, &message, &payer_share, &service_share)
+}
 pub fn aggregate(
     keys: &Keys,
     message: &Message,
@@ -271,6 +295,50 @@ mod tests {
                 return s;
             }
         }
+    }
+    #[test]
+    fn released_service_share_lets_the_payer_sign_alone() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let (p, p1) = FirstRound::begin(Role::Payer, &mut OsRng)?;
+        let (s, s1) = FirstRound::begin(Role::Service, &mut OsRng)?;
+        let (p, p2) = p.advance(s1)?;
+        let (s, s2) = s.advance(p1)?;
+        let p = p.finish(s2, NetworkType::Test)?;
+        let s = s.finish(p2, NetworkType::Test)?;
+        let share = s.service_share()?;
+        let rebuilt = Keys::from_service_share(
+            &share,
+            &p.public_bytes()?,
+            &p.public.viewing_key,
+            NetworkType::Test,
+        )?;
+        assert_eq!(rebuilt.public.address, p.public.address);
+        let mut wrong = *share;
+        wrong[0] ^= 1;
+        assert!(
+            Keys::from_service_share(
+                &wrong,
+                &p.public_bytes()?,
+                &p.public.viewing_key,
+                NetworkType::Test
+            )
+            .is_err()
+        );
+        let sighash = encoding::hash(b"TidvarRefundTest", &p.public_bytes()?)?;
+        let alpha = random_scalar().to_repr();
+        let signature = sign_alone(&p, &rebuilt, sighash, alpha, &mut OsRng)?;
+        let key = bytes32(randomized_public(&p, &alpha)?.verifying_key().serialize()?)?;
+        let key = orchard::primitives::redpallas::VerificationKey::<
+            orchard::primitives::redpallas::SpendAuth,
+        >::try_from(key)
+        .map_err(|_| SigningError::Share)?;
+        key.verify(
+            &sighash,
+            &orchard::primitives::redpallas::Signature::from(signature),
+        )
+        .map_err(|_| SigningError::Share)?;
+        assert!(sign_alone(&p, &p, sighash, alpha, &mut OsRng).is_err());
+        Ok(())
     }
     #[test]
     fn service_checks_payer_before_consuming_nonce_and_sdk_verifies_final_signature()

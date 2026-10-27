@@ -6,6 +6,7 @@ export interface Payer {
   finish_keys(peer: string, network: string): string;
   accept_seal(sealed: string, commitment: Uint8Array, round: bigint): string;
   verify_seal(openings: string): string;
+  refund_transaction(info: string, beacon: string): Uint8Array;
   record_body(offer: string, terms: string): string;
   approve_record(offer: string, terms: string, partial: string): string;
   signed_record(): string;

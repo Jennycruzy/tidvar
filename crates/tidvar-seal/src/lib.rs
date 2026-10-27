@@ -61,6 +61,12 @@ pub fn verify_beacon(info: &ChainInfo, beacon: &ApiBeacon) -> Result<VerifiedBea
     })
 }
 
+/// Verifies a beacon fetched from any drand relay, both given as the relay's JSON.
+pub fn verify_beacon_json(info: &str, beacon: &str) -> Result<VerifiedBeacon, SealError> {
+    let info: ChainInfo = serde_json::from_str(info).map_err(|_| SealError::Beacon)?;
+    let beacon: ApiBeacon = serde_json::from_str(beacon).map_err(|_| SealError::Beacon)?;
+    verify_beacon(&info, &beacon)
+}
 pub fn round_at(unix_seconds: u64) -> Result<u64, SealError> {
     unix_seconds
         .checked_sub(GENESIS)

@@ -1,0 +1,24 @@
+[package]
+name = "tidvar-cli"
+description = "Tidvar command line: send a refund, check a transaction"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "tidvar"
+path = "src/main.rs"
+
+[dependencies]
+tidvar-core = {path="../tidvar-core"}
+tidvar-chain = {path="../tidvar-chain"}
+tidvar-payee = {path="../tidvar-payee"}
+pczt.workspace = true
+rand_core = {workspace=true,features=["getrandom"]}
+tokio.workspace = true
+anyhow = "1"
+
+[lints]
+workspace = true

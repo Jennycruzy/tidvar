@@ -299,6 +299,21 @@ async function closeTab():Promise<void>{
   }
 }
 element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+element<HTMLButtonElement>("refund").onclick=async()=>{
+  const button=element<HTMLButtonElement>("refund"),status=element("close-status");
+  button.disabled=true;status.textContent="Checking the public time signal and signing your refund alone.";
+  try{
+    const result=await call("refund") as {bytes:Uint8Array;round:number};
+    const id=(localStorage.getItem("tidvar-current-tab")??"tab").slice(0,6);
+    const name="tidvar-refund-"+id+".pczt";
+    const url=URL.createObjectURL(new Blob([result.bytes.slice().buffer],{type:"application/octet-stream"}));
+    const link=document.createElement("a");link.href=url;link.download=name;link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    status.textContent="Refund signed with drand round "+result.round+" and saved as "+name+". Send it from any computer: tidvar send-refund "+name+(unit==="ZEC"?" --network mainnet":" --network testnet");
+    observe("refund_signed",{round:result.round});
+  }catch(failure){status.textContent=failure instanceof Error?failure.message:"The refund could not be signed yet.";}
+  finally{button.disabled=false;}
+};
 if(location.pathname==="/judge"){
   element("judge").hidden=false;document.getElementById("setup")?.setAttribute("hidden","");
   element<HTMLButtonElement>("judge-submit").onclick=async()=>{

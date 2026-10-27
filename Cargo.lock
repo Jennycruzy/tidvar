@@ -3469,6 +3469,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tidvar-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "pczt",
+ "rand_core 0.6.4",
+ "tidvar-chain",
+ "tidvar-core",
+ "tidvar-payee",
+ "tokio",
+]
+
+[[package]]
 name = "tidvar-core"
 version = "0.1.0"
 dependencies = [

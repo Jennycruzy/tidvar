@@ -48,6 +48,17 @@ host.onmessage = async event => {
       host.postMessage({observation:{step:"sync",elapsedMs:performance.now()-started,heapBytes:memory,wasmBytes:wasm?.decodedBodySize ?? null}});
     }
     else if (type === "pay") result = {payment: await current().pay(Boolean(value), chain) ?? null, meter: meter()};
+    else if (type === "refund") {
+      // The refund needs no service: a public drand beacon opens the service's sealed share.
+      await opening.sync(chain);
+      const payer=opening.session.current();
+      const record=JSON.parse(payer.signed_record()) as {body:{refund_ms:number;refund_round:number;tab_id:string}};
+      if(Date.now()<record.body.refund_ms)throw new Error("Your refund opens at "+new Date(record.body.refund_ms).toLocaleString()+". Until then, close the tab normally to get your money back.");
+      const base="https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
+      const info=await (await fetch(base+"/info",{credentials:"omit",cache:"no-store"})).text();
+      const beacon=await (await fetch(base+"/public/"+record.body.refund_round,{credentials:"omit",cache:"no-store"})).text();
+      result={bytes:payer.refund_transaction(info,beacon),round:record.body.refund_round};
+    }
     else if (type === "chat") result = {...await current().chat(String(value), chain), meter: meter()};
     else if (type === "vpn") result = {reply: await current().vpn(value as Parameters<Tab["vpn"]>[0]), meter: meter()};
     else if (type === "close") result={reply:await current().close(chain),meter:meter()};

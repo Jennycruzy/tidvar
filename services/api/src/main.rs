@@ -125,7 +125,7 @@ impl IntoResponse for Failure {
     }
 }
 pub fn bytes_response(content_type: &'static str, body: Vec<u8>) -> Response {
-    ([("content-type",content_type),("cache-control","no-store"),("x-content-type-options","nosniff"),("referrer-policy","no-referrer"),("content-security-policy","default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; worker-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")],body).into_response()
+    ([("content-type",content_type),("cache-control","no-store"),("x-content-type-options","nosniff"),("referrer-policy","no-referrer"),("content-security-policy","default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://api.drand.sh https://drand.cloudflare.com; worker-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")],body).into_response()
 }
 async fn offer(State(app): State<App>) -> Json<Offer> {
     Json((*app.offer).clone())
