@@ -137,3 +137,14 @@ that output privately. It does not sign or broadcast, and does not change the
 one-confirmation requirement for VPN activation. A first-seen time alone does not
 establish broadcast-to-seen latency: compare it with the wallet send time recorded
 on the phone. Historical validation output is explicitly labelled as historical.
+
+## Check a saved close without the browser
+
+Set TIDVAR_STATUS_DATABASE to the service database and TIDVAR_TAB_ID to the tab's
+public hexadecimal identifier, then run cargo run -p tidvar-payee --example close_status --locked.
+This opens one read-only SQLite connection, closes it before the network query,
+and checks the saved raw transaction against the actual testnet response. It
+reports the mined height and confirmations only after matching the raw bytes and
+transaction ID. It does not sign, broadcast, or modify the database. A saved
+height of zero can mean the browser stopped polling before confirmation; check
+the chain before considering another transaction.
