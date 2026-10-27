@@ -373,9 +373,9 @@ element<HTMLButtonElement>("prepare-cutoff").onclick=async()=>{
     await payOnce(false);
     const snapshot=await call("meter") as Meter;
     const balance=snapshot.service;
-    if(!balance || balance.paused || balance.closing || !balance.paid_until_ms)throw new Error("Resume the VPN before starting the cutoff check.");
-    const remaining=balance.paid_until_ms-Date.now();
-    if(remaining<=0 || remaining>30000)throw new Error("This tab already has away time prepaid, or its paid time expired. A short check needs a current foreground payment; existing credit is kept.");
+    if(!balance || balance.paused || balance.closing)throw new Error("Resume the VPN before starting the cutoff check.");
+    const credit=balance.paid-balance.used;
+    if(credit<=0 || credit>4)throw new Error("This tab already has away time prepaid, or needs a new foreground payment. Existing credit is kept.");
     observe("cutoff_prepared",{paidUntil:balance.paid_until_ms});
     setCutoffMode(true);showMeter(snapshot);schedule();
   }catch(failure){
