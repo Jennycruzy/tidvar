@@ -328,3 +328,15 @@ element<HTMLButtonElement>("restart-payments").onclick=()=>{
   element("restart-payments").hidden=true;
   void payOnce(false).then(schedule);
 };
+
+// A visible UTC clock lets a phone recording locate the wallet send against server observations.
+function recordingClock():void{element("recording-clock").textContent="UTC "+new Date().toISOString();}
+recordingClock();window.setInterval(recordingClock,100);
+void (async()=>{
+  const started=Date.now();
+  try{
+    const response=await fetch("/v1/offer",{credentials:"omit",cache:"no-store",signal:AbortSignal.timeout(10000)});
+    const serverDate=response.headers.get("date");
+    if(serverDate)observe("clock_sample",{started,finished:Date.now(),serverDate});
+  }catch{}
+})();
