@@ -7,6 +7,19 @@ const worker = new Worker(new URL("./worker.ts", import.meta.url), {type: "modul
 let sequence = 0;
 const waiting = new Map<number, {resolve(value: unknown): void; reject(error: Error): void}>();
 const progress = element("progress");const error = element("error");
+let workerFailure: Error | undefined;
+function failWorker(message: string): void {
+  workerFailure = new Error(message);
+  for (const pending of waiting.values()) pending.reject(workerFailure);
+  waiting.clear();
+  progress.textContent = "";
+  error.textContent = message;
+}
+worker.onerror = event => {
+  event.preventDefault();
+  failWorker("This browser could not run tab protection. Reload this page to retry. " + (event.message || "The background worker could not start."));
+};
+worker.onmessageerror = () => failWorker("This browser could not read the tab protection reply. Reload this page to recover your saved tab.");
 function observe(event:string,details:Record<string,unknown>={}):void{
   const id=localStorage.getItem("tidvar-current-tab");if(!id)return;
   const key="tidvar-timings-"+id;
@@ -34,7 +47,7 @@ worker.onmessage = event => {
 };
 let queue: Promise<unknown> = Promise.resolve();
 function call(type: string, value?: unknown): Promise<unknown> {
-  const run = () => new Promise<unknown>((resolve, reject) => {const id = ++sequence;waiting.set(id, {resolve, reject});worker.postMessage({id, type, value});});
+  const run = () => new Promise<unknown>((resolve, reject) => {if (workerFailure) {reject(workerFailure);return;}const id = ++sequence;waiting.set(id, {resolve, reject});try {worker.postMessage({id, type, value});} catch (failure) {waiting.delete(id);reject(failure instanceof Error ? failure : new Error("The browser could not send this step to tab protection."));}});
   const next = queue.then(run, run);
   queue = next.catch(() => undefined);
   return next;
