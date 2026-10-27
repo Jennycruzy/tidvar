@@ -1,0 +1,17 @@
+{
+  "name": "11-watchtower-api-stopped",
+  "ending": "watchtower",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "5cbda30e44ce31579b7b590659a72e521425f433d4727341f3b97325f6839e96",
+      "height": 4548801
+    },
+    {
+      "role": "watchtower",
+      "txid": "cb3021e0a3011f57e598993075ab9a5b500f46931d153a892e896815355c3eb5",
+      "height": 4548804
+    }
+  ]
+}
