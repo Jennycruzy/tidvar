@@ -19,6 +19,11 @@ pczt.workspace = true
 rand_core = {workspace=true,features=["getrandom"]}
 tokio.workspace = true
 anyhow = "1"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+zcash_primitives.workspace = true
 
 [lints]
 workspace = true

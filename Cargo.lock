@@ -3473,12 +3473,17 @@ name = "tidvar-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hex",
  "pczt",
  "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "tidvar-chain",
  "tidvar-core",
  "tidvar-payee",
  "tokio",
+ "zcash_primitives",
 ]
 
 [[package]]
