@@ -1,0 +1,1 @@
+A finished close from the watchtower queue, which is everything a thief of that queue would hold, was broadcast directly and mined (block 4,551,171). Its outputs are exactly the signed amounts: 1,000 zat to the service and 89,000 zat to the payer. A copy with a changed signature was refused by the node. The queue holds no keys, so nothing else can be built from it.

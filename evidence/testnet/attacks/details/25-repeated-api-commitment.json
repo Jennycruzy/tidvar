@@ -1,0 +1,8 @@
+{
+  "refused": true,
+  "error": "This payment commitment has already been used.",
+  "repeated_commitment": "BJ7A2CLt_TnGhvKwJz_qr4bt5BACBPCjxyEVofT9kto",
+  "intercepted_api_responses": 1,
+  "iou_posts": 0,
+  "method": "Browser transport intercepts one genuine isolated API response and repeats a previously consumed commitment. Original response retained to restore the honest exchange cursor."
+}

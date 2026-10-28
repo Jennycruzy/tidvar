@@ -1,0 +1,42 @@
+{
+  "name": "21-older-iou-close",
+  "attack": "AT3",
+  "result": "PASS",
+  "network": "testnet",
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "c0162ae7600a64ff2c478da540ce1203ec39c2f8bc754a848995daee2b3099d9"
+    },
+    {
+      "role": "older_iou_close",
+      "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691",
+      "height": 4551065
+    }
+  ],
+  "older_amount_zat": 100,
+  "newer_amount_zat": 200,
+  "payer_return_zat": 89900,
+  "newer_payer_return_zat": 89800,
+  "additional_payer_change_zat": 100,
+  "fees_zat": 10000,
+  "iou_sequence": [
+    5,
+    9
+  ],
+  "node_response": {
+    "error_code": 0,
+    "error_message": "\"fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691\"",
+    "network": "TESTNET"
+  },
+  "mined_outputs": {
+    "exact_bytes_match": true,
+    "height": 4551065,
+    "network": "TESTNET",
+    "recovered_output_values": [
+      100,
+      89900
+    ],
+    "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691"
+  }
+}

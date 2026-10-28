@@ -1,0 +1,1 @@
+The payer sent a well-formed, signed IOU for 1 zat when 2 zat were already used. The service refused it ("The request could not be verified. No money moved.") and the VPN controller cut the peer at the prepaid cutoff, observed within 162 ms.

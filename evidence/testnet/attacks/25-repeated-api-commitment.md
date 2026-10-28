@@ -1,0 +1,1 @@
+A test service repeated a signing commitment it had already used. The payer refused before signing anything ("This payment commitment has already been used."), and no IOU was sent. A reused nonce would leak the payer's key share, so this check is enforced on the payer's side.

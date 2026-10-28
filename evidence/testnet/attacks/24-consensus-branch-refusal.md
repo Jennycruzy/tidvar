@@ -1,0 +1,1 @@
+The same close, serialized with the old NU6.3 consensus branch, was refused by the NU7 testnet node (`transaction uses an incorrect consensus branch id`); the NU7 version was accepted and mined (block 4,551,065). IOUs follow the branch of their target height.

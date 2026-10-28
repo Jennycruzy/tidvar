@@ -1,0 +1,20 @@
+{
+  "name": "22-second-close-refusal",
+  "attack": "AT4",
+  "result": "PASS",
+  "network": "testnet",
+  "transactions": [
+    {
+      "role": "first_close",
+      "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691",
+      "height": 4551065
+    }
+  ],
+  "second_valid_close_txid": "b7dacb68e9b333e42d0a5ae7d3d3caf4911cae1595e1349b227364f6e148d3a9",
+  "second_amount_zat": 200,
+  "node_response": {
+    "error_code": -25,
+    "error_message": "failed to validate tx: WtxId(\"private\"), error: transaction did not pass consensus validation: could not contextually validate transaction on best chain: ironwood double-spend: duplicate nullifier: Nullifier(Nullifier(0x30b92bc336fbde951a9e3136abd16dacc1c85504fb2a0c69be47f067920d058f)), in finalized state: false",
+    "network": "TESTNET"
+  }
+}

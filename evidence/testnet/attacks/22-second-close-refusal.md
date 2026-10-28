@@ -1,0 +1,1 @@
+After that close was mined, a second, separately completed and valid close of the same tab (200 zat) was broadcast. The node refused it: `ironwood double-spend: duplicate nullifier`. A tab cannot be paid out twice. The full response is in the JSON.

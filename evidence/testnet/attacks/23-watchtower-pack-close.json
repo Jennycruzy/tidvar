@@ -1,0 +1,15 @@
+{
+  "name": "23-watchtower-pack-close",
+  "ending": "pass",
+  "transactions": [
+    {
+      "role": "watchtower",
+      "txid": "04a5128de9448e57e872c8e539701c0673e2e1ee80f36edcb1468178c29875d9",
+      "height": 4551171
+    }
+  ],
+  "payments": 0,
+  "fees_zat": 10000,
+  "pack_contents": "A finished close transaction and its broadcast time only; no keys, shares or nonces.",
+  "result_summary": "The only transaction a stolen pack can publish is the honest close: mined outputs equal the signed amounts."
+}

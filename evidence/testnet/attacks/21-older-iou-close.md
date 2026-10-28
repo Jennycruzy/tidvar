@@ -1,0 +1,1 @@
+The service closed a testnet tab with an older IOU (100 zat) after it had already accepted a newer one (200 zat). The network accepted it (block 4,551,065), and it can only hurt the service: the payer got 89,900 zat back instead of 89,800. The outputs recovered from the mined transaction match the signed amounts exactly.

@@ -1,0 +1,40 @@
+{
+  "amount_zat": 1,
+  "balance_before": {
+    "chat_zat": 0,
+    "closing": false,
+    "cut_at_ms": 1793198460082,
+    "paid": 4,
+    "paid_until_ms": 1793198455082,
+    "paused": false,
+    "running": true,
+    "used": 2,
+    "vpn_ms": 10201
+  },
+  "status": 200,
+  "reply": {
+    "tab_id": "05GRisUUp9nDLuyPMIUd-Cvu2Is5_tJ0Cz1nMCLhklI",
+    "k": 14,
+    "previous": "BgXge4DDqgf4_6nJSha_dgwB_sAOIIDwtSPbjeCvjU0",
+    "body": {
+      "code": "IOU_REFUSED",
+      "error": "The request could not be verified. No money moved.",
+      "step": "refused"
+    }
+  },
+  "started_at_ms": 1793198443006,
+  "completed_at_ms": 1793198443138,
+  "last_present_sample": {
+    "before_ns": 1793198460140820644,
+    "after_ns": 1793198460142205697,
+    "present": true,
+    "status": 0
+  },
+  "first_absent_sample": {
+    "before_ns": 1793198460242424467,
+    "after_ns": 1793198460244273753,
+    "present": false,
+    "status": 0
+  },
+  "cutoff_lateness_upper_ms": 162.273681640625
+}

@@ -149,6 +149,14 @@ expiry gap is the 40 blocks a cooperative close uses.
 | Using the VPN after payments stop | Internet cut in 12.8–27.8 s; the tunnel stays up so the page can still pay or close | testnet runs 02–07, mainnet run 02 |
 | Closing a tab twice / refunding a closed tab | Rejected by the network's nullifier rule; the page explains | the service and page checks |
 | An agent asked to pay more than its limits | Refused before signing: the per-request cap and the tab's size | mainnet run 03; testnet runs 14 and 17 |
+| A service seals bad key shares | Caught before funding; 0 of 10,000 challenges passed with exactly 32 valid shares | `cargo test -p tidvar-seal --test attacks`, `evidence/testnet/attacks/20` |
+| The service closes with an older IOU | Mined, and it only returns more to the payer (89,900 instead of 89,800 zat) | testnet `attacks/21`, block 4,551,065 |
+| A second valid close of the same tab | Refused by the node: `ironwood double-spend: duplicate nullifier` | testnet `attacks/22` |
+| A thief publishes the watchtower's queue | The only thing it can publish is the honest close; a changed copy is refused | testnet `attacks/23`, block 4,551,171 |
+| A transaction built for the wrong network upgrade | Refused: `incorrect consensus branch id`; the right one mined | testnet `attacks/24` |
+| The service repeats a signing nonce | The payer refuses before signing: "This payment commitment has already been used." | `at6_engine_refuses_a_repeated_service_commitment`, `attacks/25` |
+| The payer underpays inside a signed IOU | Refused, and the VPN is cut at the prepaid cutoff | testnet `attacks/26` |
+| Funding that is missing or smaller than agreed | No service: "The confirmed amount does not match the amount approved for this tab." | testnet `attacks/27` |
 | Malformed messages | 486 million fuzz inputs across 8 decoders, 0 crashes | `crates/tidvar-core/fuzz` |
 
 ## Developer kit

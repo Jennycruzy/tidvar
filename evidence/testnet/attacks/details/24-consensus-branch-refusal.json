@@ -1,0 +1,18 @@
+{
+  "previous_branch": {
+    "error_code": -25,
+    "error_message": "failed to validate tx: WtxId(\"private\"), error: transaction did not pass consensus validation: transaction uses an incorrect consensus branch id",
+    "network": "TESTNET"
+  },
+  "nu7": {
+    "error_code": 0,
+    "error_message": "\"fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691\"",
+    "network": "TESTNET"
+  },
+  "mined": {
+    "height": 4551065,
+    "mined": true,
+    "network": "TESTNET",
+    "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691"
+  }
+}

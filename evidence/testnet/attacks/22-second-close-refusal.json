@@ -1,0 +1,13 @@
+{
+  "name": "22-second-close-refusal",
+  "ending": "pass",
+  "transactions": [
+    {
+      "role": "first_close",
+      "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691",
+      "height": 4551065
+    }
+  ],
+  "payments": 0,
+  "fees_zat": 0
+}

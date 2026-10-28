@@ -1,0 +1,13 @@
+{
+  "name": "27-missing-or-smaller-funding",
+  "ending": "pass",
+  "transactions": [
+    {
+      "role": "smaller-funding",
+      "txid": "abed3a00e6c0003ba66c8ede18de4cc31d8830f0b4a55073b52643f5ec015e39",
+      "height": 4551230
+    }
+  ],
+  "payments": 0,
+  "fees_zat": 0
+}

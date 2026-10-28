@@ -1,0 +1,1 @@
+A tab with no funding was refused service ("We haven't seen your payment yet."), and a tab funded with 40,000 zat against an approved 50,000 was refused ("The confirmed amount does not match the amount approved for this tab.").

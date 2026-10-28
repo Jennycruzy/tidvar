@@ -1,0 +1,41 @@
+{
+  "result": {
+    "amount": 1000,
+    "broadcast_after_ms": 1793411142909,
+    "expiry": 4564067,
+    "fee": 10000,
+    "network": "TESTNET",
+    "returned": 89000,
+    "tab": "a43f43cced299b35ceba3c5e37be9593d045ccb993f7b74c81c211cfaad67fd7",
+    "txid": "04a5128de9448e57e872c8e539701c0673e2e1ee80f36edcb1468178c29875d9"
+  },
+  "mined-outputs": {
+    "exact_bytes_match": true,
+    "height": 4551171,
+    "network": "TESTNET",
+    "recovered_output_values": [
+      1000,
+      89000
+    ],
+    "txid": "04a5128de9448e57e872c8e539701c0673e2e1ee80f36edcb1468178c29875d9"
+  },
+  "broadcast": {
+    "error_code": 0,
+    "error_message": "\"04a5128de9448e57e872c8e539701c0673e2e1ee80f36edcb1468178c29875d9\"",
+    "network": "TESTNET"
+  },
+  "tampered-response": {
+    "error_code": -1,
+    "error_message": "any transaction with the same effects will be rejected from the mempool until a chain reset: transaction was committed to the best chain",
+    "network": "TESTNET"
+  },
+  "pack_fields": [
+    "broadcast_after_ms",
+    "expiry",
+    "network",
+    "raw",
+    "txid"
+  ],
+  "pack_encryption": "No encrypted format exists: the queue receives a finished transaction in JSON.",
+  "tampering": "Changed the binding signature; exact node response retained. This duplicate-effects rejection alone is not a proof of resistance to every modification."
+}

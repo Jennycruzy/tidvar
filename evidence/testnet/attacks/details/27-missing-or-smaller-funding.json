@@ -1,0 +1,15 @@
+{
+  "funding": {
+    "height": 4551230,
+    "mined": true,
+    "network": "TESTNET",
+    "txid": "abed3a00e6c0003ba66c8ede18de4cc31d8830f0b4a55073b52643f5ec015e39"
+  },
+  "funded_zat": 40000,
+  "approved_zat": 50000,
+  "smaller_refusal": {
+    "accepted": false,
+    "error": "The confirmed amount does not match the amount approved for this tab. Keep your backup."
+  },
+  "unfunded_refusal": "{\"name\":\"chain\",\"action\":\"nonces\",\"tab\":\"57eac067df5cf05558f8036c59eac6ffae71960d1e669f9c51c2931d6dfc97ef\",\"result\":{\"accepted\":false,\"error\":\"We haven't seen your payment yet. It shows up after one block (about a minute).\"}}"
+}

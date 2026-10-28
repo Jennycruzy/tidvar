@@ -1,0 +1,13 @@
+{
+  "name": "21-older-iou-close",
+  "ending": "pass",
+  "transactions": [
+    {
+      "role": "older_iou_close",
+      "txid": "fe66ae03965cf8856889ce21195c937ead0ba0408c9e854f5b640d144a17e691",
+      "height": 4551065
+    }
+  ],
+  "payments": 2,
+  "fees_zat": 10000
+}
