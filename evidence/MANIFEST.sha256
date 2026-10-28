@@ -6,6 +6,8 @@ b07e5fa6608d1e7a6c69f833e6f64f7b4942817e43838f3d1417a3931bda2a1e  mainnet/privac
 6e1b20aa1ba6547fd5f8dd98d03eaf2f5ebb96d0bb2a9c8b65221f3e0ad79e2e  mainnet/runs/01-phone-vpn-watchtower-close.md
 0c0b0e1e5525cc185f7df652e24c7a9a053fc80648c699bdcc1ac185bbe38866  mainnet/runs/02-phone-vpn-chat-close.json
 7fc09c7cb449a37ddee3d0cbeac97d6fc2eade468dc37fc586a3c3c7b004ff17  mainnet/runs/02-phone-vpn-chat-close.md
+13609af292af2819754f6d0a5f284239714201e10a2ad4a7fb51f50536f7e131  mainnet/runs/03-agent-in-an-mcp-client-pays-an-api.json
+351e94c1ae6d117bd8a6f8ddf1118d000ce68135bdfe7f6c1279eeb1a69d4a53  mainnet/runs/03-agent-in-an-mcp-client-pays-an-api.md
 7029657ad71cf27d79efc8c45cb64098cd61ae8079f2d9147fb5f113ffecefc2  testnet/drand/beacon.json
 3e690bc527c8a4e78232bc06b5a3cff057c51c68f51b208a1a21b2abd6d6b194  testnet/drand/info.json
 d452e4efc2eac6ee6402ebde76bcca93bb560cfaa1b292594b346b641392a1a3  testnet/drand/previous.json

@@ -63,6 +63,7 @@ Every run is a real transaction on the public chain, listed in `evidence/` and r
 
 | Run | What happened | Transactions |
 |---|---|---|
+| 03 | **An AI agent paid an API on its own.** A general-purpose AI assistant, with `tidvar-agent` as its MCP tool, paid the live OpenAI-compatible model API at `tidvar.site/llm` twice (1,000 zat each) from a tab funded once with 0.0006 ZEC. With a 500 zat per-request cap, the next call was refused before paying: "This route asks 1000 zat, above the 500 zat limit for one request." The close paid exactly **2,000 zat** and returned **48,000 zat**. | [funding](https://blockchair.com/zcash/transaction/7c10e79fd5b83cdff8cb2e3b6e6d8113f88ed293f9a42c5122b97d7469c4cfee) · [close](https://blockchair.com/zcash/transaction/b3cf35ad83700837bbc71373aabbab0a634f294f6c4b34a20753479365cd4aee) (block 3,533,862) |
 | 02 | An Android phone opened a 0.0005 ZEC tab and paid it from Zingo. It used the VPN for 12 minutes, kept paid 8 hours ahead, paused and resumed it, and asked Tidvar Chat one question. The close paid the service exactly **1,120 zat** (1,000 for the answer, 120 for VPN time) and returned **38,880 zat** to the payer's Zodl wallet. | [funding](https://blockchair.com/zcash/transaction/a4ec513db55853ba0b895ca7254238f0efc6cbd0994a9123b4e6fc4139f3854b) · [close](https://blockchair.com/zcash/transaction/ec29f3018a7b1e9e2bc73651b15e8bece5ddff032ea7ed8a56929e0aea4a90b7) (block 3,533,841) |
 | 01 | A phone tab with the VPN connected; the watchtower, a separate process holding no keys, published the tab's close on its own and returned 39,993 zat. | [funding](https://blockchair.com/zcash/transaction/c00483ad876a3103cbb1b29e41f8570c0c187c073b4f1179fd51fcdc6a2ea75f) · [close](https://blockchair.com/zcash/transaction/ffb745da6f1e17ca60004783093d999ca3f9c71e974ada728a7c4c71fe24038f) (block 3,533,748) |
 
@@ -144,7 +145,7 @@ expiry gap is the 40 blocks a cooperative close uses.
 | A message from one tab presented for another | Refused | `at13_message_for_one_tab_is_refused_for_another` |
 | Using the VPN after payments stop | Internet cut in 12.8–27.8 s; the tunnel stays up so the page can still pay or close | testnet runs 02–07, mainnet run 02 |
 | Closing a tab twice / refunding a closed tab | Rejected by the network's nullifier rule; the page explains | the service and page checks |
-| An agent asked to pay more than its limits | Refused before signing: the per-request cap (run 17) and the tab's size (run 14) | testnet runs 14 and 17 |
+| An agent asked to pay more than its limits | Refused before signing: the per-request cap and the tab's size | mainnet run 03; testnet runs 14 and 17 |
 | Malformed messages | 486 million fuzz inputs across 8 decoders, 0 crashes | `crates/tidvar-core/fuzz` |
 
 ## Developer kit

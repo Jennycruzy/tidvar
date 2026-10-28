@@ -1,0 +1,17 @@
+{
+  "name": "03-agent-in-an-mcp-client-pays-an-api",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "7c10e79fd5b83cdff8cb2e3b6e6d8113f88ed293f9a42c5122b97d7469c4cfee",
+      "height": 3533860
+    },
+    {
+      "role": "close",
+      "txid": "b3cf35ad83700837bbc71373aabbab0a634f294f6c4b34a20753479365cd4aee",
+      "height": 3533862
+    }
+  ]
+}
