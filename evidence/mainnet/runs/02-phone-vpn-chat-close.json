@@ -1,0 +1,17 @@
+{
+  "name": "02-phone-vpn-chat-close",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "a4ec513db55853ba0b895ca7254238f0efc6cbd0994a9123b4e6fc4139f3854b",
+      "height": 3533805
+    },
+    {
+      "role": "close",
+      "txid": "ec29f3018a7b1e9e2bc73651b15e8bece5ddff032ea7ed8a56929e0aea4a90b7",
+      "height": 3533841
+    }
+  ]
+}
