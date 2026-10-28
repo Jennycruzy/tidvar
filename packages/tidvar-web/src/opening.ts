@@ -2,7 +2,7 @@ import {Session} from "./session.js";
 import {loadWasm, type Wasm} from "./wasm.js";
 import type {EncryptedBackup} from "./storage.js";
 export interface Offer {version: number; network: "Testnet" | "Mainnet"; service_name: string; address: string; maximum_lifetime_ms: number; vpn_ms_per_zat: number; service_key: string}
-export interface Terms {funded: number; open_ms: number; lifetime: "Minutes15" | "Days3" | "Days7" | "Days30"; open_height: number; return_address: string}
+export interface Terms {funded: number; open_ms: number; lifetime: "Minutes15" | "Hours2" | "Days3" | "Days7" | "Days30"; open_height: number; return_address: string}
 interface Envelope {tab_id: string; k: number; previous: string | null; body: Record<string, unknown>}
 interface Funding {address: string; amount_zat: number; amount: string; uri: string}
 function bytes(text: string): Uint8Array<ArrayBuffer> {

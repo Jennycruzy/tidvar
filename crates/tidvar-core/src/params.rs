@@ -157,6 +157,8 @@ pub fn must_remove_peer(now_ms: u64, paid_until_ms: u64) -> bool {
 pub enum Lifetime {
     /// Testnet only: lets the refund and the forced close be shown end to end in minutes.
     Minutes15,
+    /// A short session: the forced close comes after 1 hour and the refund after 2.
+    Hours2,
     Days3,
     Days7,
     Days30,
@@ -166,6 +168,7 @@ impl Lifetime {
     pub const fn seconds(self) -> u64 {
         match self {
             Self::Minutes15 => 15 * 60,
+            Self::Hours2 => 2 * 3_600,
             Self::Days3 => 3 * 86_400,
             Self::Days7 => 7 * 86_400,
             Self::Days30 => 30 * 86_400,
@@ -295,6 +298,16 @@ mod tests {
                 short.refund_ms
             ),
             (112_500, 225_000, 450_000, 900_000)
+        );
+        let session = Deadlines::new(0, Lifetime::Hours2.seconds() * 1000)?;
+        assert_eq!(
+            (
+                session.pack_ms,
+                session.watch_ms,
+                session.close_ms,
+                session.refund_ms
+            ),
+            (900_000, 1_800_000, 3_600_000, 7_200_000)
         );
         for duration in [Lifetime::Days3, Lifetime::Days7, Lifetime::Days30] {
             let seconds = duration.seconds();
