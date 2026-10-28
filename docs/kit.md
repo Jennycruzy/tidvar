@@ -109,7 +109,7 @@ tidvar-agent close                                  # the rest returns to your a
 starts the agent sets both, so nothing a model reads can raise them.
 
 As an MCP stdio server (`tidvar-agent mcp`), it offers `tab_status`, `ask`, `fetch_paid` (any method and
-body) and `close_tab`. In Claude Code: `claude mcp add tidvar -- node packages/tidvar-agent/agent.mjs mcp`.
+body) and `close_tab`. Register `node packages/tidvar-agent/agent.mjs mcp` as a stdio server in any MCP client.
 Any MCP client:
 
 ```json

@@ -170,7 +170,7 @@ tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amoun
 tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
   --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close
-claude mcp add tidvar -- node packages/tidvar-agent/agent.mjs mcp   # the same tab as a tool in Claude Code
+node packages/tidvar-agent/agent.mjs mcp   # the same tab as a tool in any MCP client
 ```
 
 ## Attacks tried
