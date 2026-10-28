@@ -1,3 +1,7 @@
+b0093fc85bdfb50838550948de4785a2263eff92c5c89bd3b6dd7375e4adca9b  mainnet/privacy/README.md
+bca3093ebd286320b15976d583651e467564fddd2b70fe8d6aacf6369ba01adb  mainnet/privacy/expiry-gaps.csv
+63dc3afcceee27d46f3615fdf0f590c0c93eb68cd314effd7a8064c9599eb2c5  mainnet/privacy/ironwood-rows.csv
+b07e5fa6608d1e7a6c69f833e6f64f7b4942817e43838f3d1417a3931bda2a1e  mainnet/privacy/summary.json
 7029657ad71cf27d79efc8c45cb64098cd61ae8079f2d9147fb5f113ffecefc2  testnet/drand/beacon.json
 3e690bc527c8a4e78232bc06b5a3cff057c51c68f51b208a1a21b2abd6d6b194  testnet/drand/info.json
 d452e4efc2eac6ee6402ebde76bcca93bb560cfaa1b292594b346b641392a1a3  testnet/drand/previous.json
@@ -26,3 +30,5 @@ bf59104d7379a13b1b642b4f8e3f1c0c7d0ffeb34788260a3490a3aaf450b68b  testnet/runs/1
 24aa34a1fa1f9f87eda0a57603fe668b52a1e0af56ab1f7a9f15cb8a07da977e  testnet/runs/11-watchtower-api-stopped.md
 7f79f903b04bbfb6ad433327eb6c77367a14de08c6a85fd8e75cecaf52b2fe52  testnet/runs/12-public-page-chat-and-paid-api.json
 8b3e901ee353e3f1d8b18ab484f56b008ef1beadc706e55743aae24022e14662  testnet/runs/12-public-page-chat-and-paid-api.md
+2475d2bd82d81726699e7fdec7ea7a264e8c830aa1311ffcfc0398660b1410a9  testnet/runs/13-refund-after-slow-funding.json
+5753af3e9fab36b067a3132ded2d0e7e47c4bd6ef531a3a33b22f0ef436e6db5  testnet/runs/13-refund-after-slow-funding.md

@@ -1,0 +1,17 @@
+{
+  "name": "13-refund-after-slow-funding",
+  "ending": "refund",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "c29ab72ded8147789c5976a25294c147dc2bff75f8460be7b438a270bc7b0a5b",
+      "height": 4548768
+    },
+    {
+      "role": "refund",
+      "txid": "bbe88abfeec7084f34eb37f0fea3c97edee917882766196e958f91ef32986d21",
+      "height": 4549020
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "blocks": [
+    3530998,
+    3532997
+  ],
+  "expiry_gap_percentiles": {
+    "p10": 38,
+    "p50": 125,
+    "p90": 139
+  },
+  "expiry_gap_sampled": 200,
+  "ironwood_only_by_action_count": {
+    "1": 515,
+    "10": 5,
+    "11": 4,
+    "13": 1,
+    "15": 2,
+    "16": 1,
+    "17": 1,
+    "2": 8404,
+    "25": 1,
+    "27": 1,
+    "270": 1,
+    "3": 331,
+    "33": 1,
+    "4": 284,
+    "5": 91,
+    "6": 35,
+    "61": 4,
+    "7": 19,
+    "76": 1,
+    "8": 9,
+    "9": 5
+  },
+  "ironwood_only_transactions": 9716,
+  "ironwood_transactions": 9784,
+  "network": "Mainnet",
+  "server": "https://zec.rocks:443"
+}
