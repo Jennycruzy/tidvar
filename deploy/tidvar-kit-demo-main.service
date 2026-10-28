@@ -1,0 +1,19 @@
+[Unit]
+Description=Tidvar kit example on mainnet: a second service charging 2,000 zat per request (tidvar-402)
+After=tidvar-api-main.service
+Requires=tidvar-api-main.service
+
+[Service]
+Type=simple
+Environment=TIDVAR_DATA_DIR=/root/tidvar-data-main TIDVAR_KIT_LISTEN=127.0.0.1:27467
+ExecStart=/bin/sh -c "TIDVAR_OFFER_JSON=$(curl -sf http://127.0.0.1:27491/v1/offer) exec /root/tidvar/target/release/tidvar-kit-demo"
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data-main
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

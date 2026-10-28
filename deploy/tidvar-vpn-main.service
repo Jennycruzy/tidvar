@@ -1,0 +1,24 @@
+[Unit]
+Description=Tidvar mainnet VPN
+After=network-online.target tidvar-vpn.service
+Wants=network-online.target tidvar-dns-main.service
+
+[Service]
+EnvironmentFile=-/root/tidvar-private/vpn-limits.env
+EnvironmentFile=/root/tidvar-private/vpn-mainnet.env
+Type=notify
+NotifyAccess=all
+WorkingDirectory=/root/tidvar
+ExecStart=/root/tidvar/target/release/tidvar-vpn
+ExecStopPost=/root/tidvar/target/release/tidvar-vpn stop
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data-main /root/tidvar-private/keys /etc/ufw /run
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

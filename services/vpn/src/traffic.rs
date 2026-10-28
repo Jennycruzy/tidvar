@@ -15,10 +15,11 @@ pub fn configure(peer: &Peer) -> Result<()> {
             .context("Invalid VPN traffic class.")?
     );
     let batch = format!(
-        "class replace dev tidvar parent 1:1 classid {class} htb rate 20mbit ceil 20mbit burst 128k cburst 128k quantum 1514\n\
-         filter replace dev tidvar parent 1: protocol ip pref {slot} flower dst_ip {address}/32 classid {class}\n\
-         filter replace dev tidvar parent ffff: protocol ip pref {slot} flower src_ip {address}/32 action police rate 20mbit burst 128k conform-exceed drop/ok\n",
+        "class replace dev {dev} parent 1:1 classid {class} htb rate 20mbit ceil 20mbit burst 128k cburst 128k quantum 1514\n\
+         filter replace dev {dev} parent 1: protocol ip pref {slot} flower dst_ip {address}/32 classid {class}\n\
+         filter replace dev {dev} parent ffff: protocol ip pref {slot} flower src_ip {address}/32 action police rate 20mbit burst 128k conform-exceed drop/ok\n",
         slot = peer.slot,
+        dev = std::env::var("TIDVAR_VPN_INTERFACE").unwrap_or_else(|_| "tidvar".to_owned()),
     );
     let mut child = Command::new("/usr/sbin/tc")
         .args(["-batch", "-"])

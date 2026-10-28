@@ -1,0 +1,19 @@
+[Unit]
+Description=Tidvar private DNS (mainnet VPN)
+After=tidvar-vpn-main.service
+Requires=tidvar-vpn-main.service
+PartOf=tidvar-vpn-main.service
+
+[Service]
+ExecStartPre=/bin/sh -c "test -s /var/lib/unbound/root.key || cp /usr/share/dns/root.key /var/lib/unbound/root.key"
+ExecStartPre=/bin/chown -R unbound:unbound /var/lib/unbound
+ExecStart=/usr/sbin/unbound -d -c /etc/unbound/tidvar-main.conf
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/unbound
+
+[Install]
+WantedBy=multi-user.target

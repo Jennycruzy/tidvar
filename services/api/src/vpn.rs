@@ -108,7 +108,7 @@ fn action_body(
             serde_json::json!({
                 "step":"vpn_peer",
                 "address":format!("{}/32",peer.address().map_err(failure)?),
-                "dns":"10.77.0.1",
+                "dns":format!("10.{}.0.1", tidvar_payee::store::vpn_net()),
                 "server_key":server["server_key"],
                 "endpoint":server["endpoint"],
                 "balance":balance,

@@ -716,6 +716,14 @@ pub struct Peer {
     pub public_key: [u8; 32],
     pub slot: u32,
 }
+/// The second octet of this VPN's 10.x.0.0/16 network (77 unless `TIDVAR_VPN_NET` says otherwise), so a
+/// mainnet and a testnet VPN can run side by side.
+pub fn vpn_net() -> u8 {
+    std::env::var("TIDVAR_VPN_NET")
+        .ok()
+        .and_then(|net| net.parse().ok())
+        .unwrap_or(77)
+}
 impl Peer {
     pub fn address(&self) -> Result<std::net::Ipv4Addr, PayeeError> {
         let host = self
@@ -725,7 +733,7 @@ impl Peer {
             .ok_or(PayeeError::Terms)?;
         Ok(std::net::Ipv4Addr::new(
             10,
-            77,
+            vpn_net(),
             u8::try_from(host / 256).map_err(|_| PayeeError::Terms)?,
             u8::try_from(host % 256).map_err(|_| PayeeError::Terms)?,
         ))

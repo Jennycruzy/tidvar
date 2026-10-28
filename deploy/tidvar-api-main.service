@@ -1,0 +1,21 @@
+[Unit]
+Description=Tidvar API (mainnet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/root/tidvar-private/vpn-limits.env
+Type=simple
+WorkingDirectory=/root/tidvar
+EnvironmentFile=/root/tidvar-private/api-mainnet.env
+ExecStart=/root/tidvar/target/release/tidvar-api
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data-main /root/tidvar-private/keys /root/tidvar-watch
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

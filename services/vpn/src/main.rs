@@ -16,7 +16,15 @@ use tidvar_payee::{store::Store, usage::Limits};
 use wireguard_control::{Backend, Device, DeviceUpdate, InterfaceName, Key, PeerConfigBuilder};
 use zeroize::Zeroizing;
 
-const INTERFACE: &str = "tidvar";
+fn interface() -> String {
+    std::env::var("TIDVAR_VPN_INTERFACE").unwrap_or_else(|_| "tidvar".to_owned())
+}
+fn port() -> u16 {
+    std::env::var("TIDVAR_VPN_PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(51820)
+}
 fn data() -> String {
     std::env::var("TIDVAR_DATA_DIR").unwrap_or_else(|_| "/root/tidvar-data".to_owned())
 }
@@ -75,7 +83,7 @@ fn remove(name: &InterfaceName, key: [u8; 32]) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("A VPN connection could not be removed."))
 }
 fn stop() -> Result<()> {
-    let name: InterfaceName = INTERFACE.parse()?;
+    let name: InterfaceName = interface().parse()?;
     let Some(mut device) = Device::get(&name, Backend::Kernel).ok() else {
         return Ok(());
     };
@@ -99,8 +107,7 @@ fn stop() -> Result<()> {
 fn public_configuration(public: &Key) -> Result<()> {
     let output = Path::new(&data()).join("vpn.json");
     let temporary = Path::new(&data()).join("vpn.json.new");
-    let value =
-        serde_json::json!({"server_key":public.to_base64(),"endpoint":"38.49.216.59:51820"});
+    let value = serde_json::json!({"server_key":public.to_base64(),"endpoint":format!("38.49.216.59:{}", port())});
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -114,7 +121,7 @@ fn public_configuration(public: &Key) -> Result<()> {
 }
 fn run() -> Result<()> {
     let limits = Limits::from_environment()?;
-    let name: InterfaceName = INTERFACE.parse()?;
+    let name: InterfaceName = interface().parse()?;
     let secret = private_key()?;
     let mut private = Key(*secret);
     let public = private.get_public();
@@ -126,7 +133,7 @@ fn run() -> Result<()> {
     }
     DeviceUpdate::new()
         .set_private_key(private.clone())
-        .set_listen_port(51820)
+        .set_listen_port(port())
         .replace_peers()
         .apply(&name, Backend::Kernel)
         .map_err(|_| anyhow::anyhow!("The kernel VPN could not be configured."))?;
