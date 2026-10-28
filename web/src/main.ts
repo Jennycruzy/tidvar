@@ -202,8 +202,11 @@ function showMeter(meter: Meter): void {
   element("prepare-cutoff").hidden=closing;
   element("stop-payments").hidden=closing;
   if(closing)element("restart-payments").hidden=true;
-  element("vpn-pause").hidden = closing || service.paused;
-  element("vpn-resume").hidden = closing || !service.paused;
+  // Pause or Resume only once the service has said which state the VPN is in; until then the
+  // saved local state may be out of date (for example right after a reload).
+  const known = meter.service != null;
+  element("vpn-pause").hidden = closing || !known || service.paused;
+  element("vpn-resume").hidden = closing || !known || !service.paused;
 }
 async function payOnce(hidden: boolean): Promise<void> {
   observe("payment_requested",{hidden});
