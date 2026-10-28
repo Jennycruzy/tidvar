@@ -73,6 +73,18 @@ function showWords(target: HTMLElement, words: string): void {
     return [cell, document.createTextNode(" ")];
   }));
 }
+// Copies the 24 words in order, space-separated, for a password manager or paper.
+function copyWords(source: string, button: string): void {
+  element<HTMLButtonElement>(button).onclick = async () => {
+    const words = (element(source).textContent ?? "").trim().split(/\s+/).join(" ");
+    const target = element<HTMLButtonElement>(button);
+    try {await navigator.clipboard.writeText(words);target.textContent = "Copied";}
+    catch {target.textContent = "Copy by hand";}
+    window.setTimeout(() => {target.textContent = "Copy words";}, 2000);
+  };
+}
+copyWords("phrase", "copy-phrase");
+copyWords("renew-phrase", "copy-renew-phrase");
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
   protect.disabled = true;error.textContent = "";progress.textContent = "Protecting this tab on your device.";

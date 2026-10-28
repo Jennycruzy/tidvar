@@ -103,6 +103,7 @@ button:disabled{opacity:.55;cursor:progress;transform:none}
 .phrase span{display:flex;align-items:baseline;gap:7px;min-width:0;overflow:hidden;padding:9px 10px;font-family:var(--mono);font-size:.9rem;background:var(--surface);border:1px solid var(--line);border-radius:9px}
 .phrase span::before{content:attr(data-n);font-size:.7rem;color:var(--muted);min-width:1.4em;text-align:right}
 .phrase:empty{display:none}
+.copy-words{margin-top:12px;min-height:40px;padding:9px 14px;font-size:.88rem}
 
 /* Funding */
 .fund{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;margin-top:20px}
