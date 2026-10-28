@@ -278,11 +278,17 @@ element<HTMLButtonElement>("vpn-setup").onclick = async () => {
   } catch (failure) {error.textContent = failure instanceof Error ? failure.message : "The VPN could not be set up.";}
   finally {button.disabled = false;}
 };
-for (const [id, step] of [["vpn-pause", "vpn_pause"], ["vpn-resume", "vpn_resume"]] as const) {
+for (const [id, step, busy] of [["vpn-pause", "vpn_pause", "Pausing…"], ["vpn-resume", "vpn_resume", "Resuming…"]] as const) {
   element<HTMLButtonElement>(id).onclick = async () => {
-    error.textContent = "";
+    // Shows the press at once and locks the button until the service answers, so a second tap
+    // cannot undo the first while it waits behind a payment.
+    const button = element<HTMLButtonElement>(id);
+    const label = button.textContent;
+    if (button.disabled) return;
+    button.disabled = true;button.textContent = busy;error.textContent = "";
     try {showMeter((await call("vpn", {step}) as {meter: Meter}).meter);}
     catch (failure) {error.textContent = failure instanceof Error ? failure.message : "The request could not finish. Retry.";}
+    finally {button.disabled = false;button.textContent = label;}
   };
 }
 window.addEventListener("pagehide", () => {if (configUrl) URL.revokeObjectURL(configUrl);});
