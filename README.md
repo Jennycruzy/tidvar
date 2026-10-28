@@ -8,6 +8,7 @@
 
 <p align="center">
 <a href="https://tidvar.site">Mainnet app</a> ·
+<a href="https://youtu.be/ckcJrI-__zQ">Demo video</a> ·
 <a href="https://tidvar.38-49-216-59.sslip.io">Testnet app</a> ·
 <a href="https://tidvar.site/check">Check it yourself</a> ·
 <a href="docs/protocol.md">Protocol</a> ·
@@ -24,7 +25,7 @@ alone at the refund time. Hundreds of payments; two transactions on chain.
 It is a payment channel on Zcash with no change to Zcash itself, and it is live on **mainnet** today with
 three uses: a VPN paid by the second, any HTTP API paid per request, and AI agents with a hard budget.
 
-> **Judges, start here (3 minutes).** Open the [mainnet app](https://tidvar.site)
+> **Judges, start here (3 minutes).** Watch the [2-minute demo](https://youtu.be/ckcJrI-__zQ). Then open the [mainnet app](https://tidvar.site)
 > and scroll the landing page. Then press **Check it yourself** in the header: it re-fetches every recorded
 > transaction from a public Zcash server and recomputes its id in your browser, no keys needed. Want to pay?
 > Use the **Testnet** switch in the header and a faucet; everything works the same with free TAZ.
