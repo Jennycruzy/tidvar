@@ -1,0 +1,17 @@
+{
+  "name": "18-vpn-kept-paid-eight-hours-ahead",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "10015b653ab93de4f5bbc46b84592f275608af3b2c2ab884bf2d034682e8ac61",
+      "height": 4551604
+    },
+    {
+      "role": "close",
+      "txid": "01b8a7f8f576d3216f6ce1d2103cb70e511dc16ea59b1aea35b16a1d28c93bac",
+      "height": 4551607
+    }
+  ]
+}

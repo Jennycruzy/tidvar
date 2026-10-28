@@ -1,77 +1,82 @@
-# Tidvar
+<p align="center"><img src="docs/brand/tidvar-icon.svg" width="88" alt="Tidvar"></p>
 
-**Pay for a VPN by the second, and for an AI answer by the answer, in private Zcash. Each payment is smaller
-than Zcash's own network fee, and the service never holds your money.**
+<h1 align="center">Tidvar</h1>
 
-You open a tab with one ordinary shielded payment from your wallet. From then on your browser pays the
-service off-chain, every 10 seconds, exactly for what you use: 1 zatoshi per 6 seconds of VPN, 1,000 zatoshi
-per chat answer. When you are done, one shielded transaction pays the service what you used and sends the
-rest back to you. Hundreds of payments, two transactions on chain.
+<p align="center"><b>Pay for exactly what you use, in private Zcash. Nobody holds your money.</b></p>
 
-Tidvar is a payment channel on Zcash with no change to Zcash itself. It ships a VPN, an AI chat, a paywall
-for any web API (`tidvar-402`) and an agent with a hard spending limit (`tidvar-agent`).
+<p align="center">
+<a href="https://mainnet.tidvar.38-49-216-59.sslip.io">Mainnet app</a> ·
+<a href="https://tidvar.38-49-216-59.sslip.io">Testnet app</a> ·
+<a href="https://mainnet.tidvar.38-49-216-59.sslip.io/check">Check it yourself</a> ·
+<a href="docs/protocol.md">Protocol</a> ·
+<a href="docs/security.md">Threat model</a> ·
+<a href="docs/kit.md">Developer kit</a>
+</p>
 
-**[Mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io)** ·
-**[Testnet app](https://tidvar.38-49-216-59.sslip.io)** ·
-**[Check it yourself](https://tidvar.38-49-216-59.sslip.io/check)** ·
-**[Protocol](docs/protocol.md)** · **[Threat model](docs/security.md)** · **[Developer kit](docs/kit.md)** ·
-**[Evidence](evidence/)**
+You open a **tab** with one ordinary shielded payment from any Zcash wallet. Your browser, your AI agent or
+your app then pays the service **off-chain, instantly, by the second or by the request**, in amounts far
+smaller than Zcash's own network fee. When you're done, **one shielded transaction** pays the service exactly
+what you used and sends the rest back to you. If the service ever disappears, you take everything back
+alone at the refund time. Hundreds of payments; two transactions on chain.
 
-## What one tab costs
+It is a payment channel on Zcash with no change to Zcash itself, and it is live on **mainnet** today with
+three uses: a VPN paid by the second, any HTTP API paid per request, and AI agents with a hard budget.
 
-| | One payment in your wallet | A Tidvar tab |
+> **Judges, start here (3 minutes).** Open the [mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io)
+> and scroll the landing page. Then press **Check it yourself** in the header: it re-fetches every recorded
+> transaction from a public Zcash server and recomputes its id in your browser, no keys needed. Want to pay?
+> Use the **Testnet** switch in the header and a faucet; everything works the same with free TAZ.
+
+| Landing | Open a tab | Backup words | Fund it from any wallet |
+|---|---|---|---|
+| <img src="docs/screens/1-landing.png" width="190"> | <img src="docs/screens/2-open.png" width="190"> | <img src="docs/screens/3-words.png" width="190"> | <img src="docs/screens/4-fund.png" width="190"> |
+
+## Why a tab
+
+A minute of VPN is worth about 10 zatoshi. One ordinary Zcash payment costs 10,000 zatoshi in fees. Paying
+by the minute, by the answer or by the API call with ordinary transactions costs a thousand times more in fees
+than the thing being bought, and a prepaid account means the service holds your money. A tab removes both.
+
+| | Ordinary payments | A Tidvar tab |
 |---|---|---|
-| Network fee | 10,000 zat (0.0001 ZEC) per payment | 10,000 zat to open (your wallet's send) + 10,000 zat to close, for any number of payments |
-| Smallest payment | 10,000 zat would be the fee alone | 1 zat (6 seconds of VPN) |
-| Speed | about 75 s for a block | instant: signed in the browser, checked by the service |
-| What the chain sees | one shielded transaction per payment | two shielded transactions per tab, shaped like 86.5% of mainnet Ironwood transactions |
+| Fees for 400 payments | 4,000,000 zat | 20,000 zat (one open, one close) |
+| Smallest payment | the 10,000 zat fee alone | 1 zat (6 seconds of VPN) |
+| Speed | about 75 s per block | instant: signed on your device, checked by the service |
+| Who holds the money | you, or the service if prepaid | a lock that needs both keys; unused value returns to you |
+| What the chain sees | every payment | two shielded transactions, shaped like 86.5% of mainnet Ironwood traffic |
 
-## Recorded so far
+## What runs today
 
-Every run below is a real transaction on the public chain, re-checked by `tidvar verify` and by the
-[check page](https://tidvar.38-49-216-59.sslip.io/check). TESTNET runs pay in TAZ.
+| Use | How it is paid | Try it |
+|---|---|---|
+| **VPN** | by the second (1 zat / 6 s), kept paid 1, 8 or 24 hours ahead so a locked phone keeps it on; Pause, Resume, Close | the [app](https://mainnet.tidvar.38-49-216-59.sslip.io/open) and the standard WireGuard app |
+| **Any HTTP API** | per request, any price per path, through a proxy in front of an existing API (no code change); every 402 speaks **x402 v2** | live: an unmodified llama.cpp server's OpenAI chat API at `/llm/v1/chat/completions`, 1,000 zat a call |
+| **AI agents** | the agent funds its own tab once; the tab's size and a per-request cap are limits no prompt can raise; CLI or **MCP** tool | `tidvar-agent` (below) |
+| **Tidvar Chat** | 1,000 zat per answer, from the same tab | in the app |
+
+## Proof
+
+Every run is a real transaction on the public chain, listed in `evidence/` and re-checked by
+`tidvar verify` and by the browser check page.
+
+**Mainnet**
+
+| Run | What happened | Transactions |
+|---|---|---|
+| 02 | An Android phone opened a 0.0005 ZEC tab and paid it from Zingo. It used the VPN for 12 minutes, kept paid 8 hours ahead, paused and resumed it, and asked Tidvar Chat one question. The close paid the service exactly **1,120 zat** (1,000 for the answer, 120 for VPN time) and returned **38,880 zat** to the payer's Zodl wallet. | [funding](https://blockchair.com/zcash/transaction/a4ec513db55853ba0b895ca7254238f0efc6cbd0994a9123b4e6fc4139f3854b) · [close](https://blockchair.com/zcash/transaction/ec29f3018a7b1e9e2bc73651b15e8bece5ddff032ea7ed8a56929e0aea4a90b7) (block 3,533,841) |
+| 01 | A phone tab with the VPN connected; the watchtower, a separate process holding no keys, published the tab's close on its own and returned 39,993 zat. | [funding](https://blockchair.com/zcash/transaction/c00483ad876a3103cbb1b29e41f8570c0c187c073b4f1179fd51fcdc6a2ea75f) · [close](https://blockchair.com/zcash/transaction/ffb745da6f1e17ca60004783093d999ca3f9c71e974ada728a7c4c71fe24038f) (block 3,533,748) |
+
+**Testnet: 18 tabs, 37 transactions**, every way a tab can end:
 
 | Ending | Runs | What happened |
 |---|---|---|
-| Cooperative close | 11 | VPN on an Android phone, desktop Chrome and Firefox; chat; a paid API call; an agent's tab |
+| Cooperative close | 13 | VPN on an Android phone, desktop Chrome and Firefox; chat; a paid API; an agent paying an OpenAI-compatible API over x402; a VPN kept paid 8 hours ahead |
 | Forced close | 1 | The payer left; at its closing deadline the service closed alone with the newest signed amount |
 | Refund | 2 | The service never answered; after the refund time the browser signed the refund alone |
-| Watchtower | 1 | The service was stopped; a separate process holding no keys published its close |
-| Top-up + renew | 1 + 1 | A tab paid past its first payment's limit after a top-up, then rolled into a new tab in one transaction |
+| Watchtower | 1 | The service was stopped; the watchtower published its close |
+| Top-up and renew | 1 + 1 | A tab paid past its first payment's limit after a top-up, then rolled into a new tab in one transaction |
 
-**MAINNET** (`evidence/mainnet/runs/`, `tidvar verify --network mainnet`):
-
-| Run | What happened | On chain |
-|---|---|---|
-| 02 | An Android phone opened a 0.0005 ZEC tab, paid it from Zingo, used the VPN for 12 minutes kept paid 8 hours ahead, paused and resumed it, and asked Tidvar Chat one question. The close paid the service exactly 1,120 zat (1,000 for the answer, 120 for VPN time) and returned 38,880 zat to the payer's Zodl wallet. | funding `a4ec513d…` · close `ec29f301…`, block 3,533,841 |
-| 01 | A phone tab with the VPN on; the watchtower, holding no keys, published the tab's close on its own. | funding `c00483ad…` · close `ffb745da…`, block 3,533,748 |
-
-**16 tabs, 33 transactions, all on TESTNET** (`evidence/testnet/runs/`). VPN cut-off after payments stop:
-12.8–27.8 s, measured on an Android phone, desktop Chrome and Firefox. Pause cuts it in about 1 second.
-
-## One story
-
-An agent opened a 0.0005 TAZ tab and asked Tidvar Chat 29 questions at 1,000 zat each. The 30th was refused by
-the tab itself: "The payment amount exceeds the tab limit." Nothing in the agent's code could raise that
-limit, because the money sits in a lock that needs both the agent's key and the service's. The close paid
-the service exactly 29,000 zat and returned 11,000 (`evidence/testnet/runs/14-agent-spending-limit`).
-
-## Try it
-
-1. Open the [mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io/open) (ZEC) or the
-   [testnet app](https://tidvar.38-49-216-59.sslip.io/open) (TAZ, free from a faucet).
-2. Choose an amount (at least 0.0005) and how long the tab lasts: 15 or 30 minutes, 2 hours, 3, 7 or 30 days. That is also when
-   your money comes back to you alone if the service disappears.
-3. Paste a fresh receive address from your wallet for the change, write down the 24 words, then pay the QR
-   code from any Zcash wallet with Ironwood (Zodl, Zingo).
-4. After one block: turn on the VPN (WireGuard config or QR), ask Tidvar Chat, top up, renew, or close.
-   The meter shows every payment and "on chain: N transactions". Choose how long the VPN stays paid when you
-   leave the page (1, 8 or 24 hours) and lock your phone: it keeps running.
-
-## Check it yourself in 60 seconds
-
-No keys needed. In the browser: [/check](https://tidvar.38-49-216-59.sslip.io/check) fetches every recorded
-transaction from the public Zcash server and recomputes its id from the raw bytes. From a terminal:
+VPN cut-off after payments stop: 12.8–27.8 s, measured on an Android phone, desktop Chrome and Firefox.
 
 ```sh
 cargo install --git https://github.com/Jennycruzy/tidvar tidvar-cli
@@ -79,128 +84,117 @@ tidvar verify --network mainnet
 tidvar verify --network testnet
 ```
 
-It re-fetches every txid in `evidence/`, checks heights, and checks the files against `MANIFEST.sha256`.
+## How a tab works
 
-## How it works
-
-1. **Open.** Your browser and the service make a joint key (FROST, two of two) for a new Ironwood address
-   that neither can spend alone. The service also seals its key share to a future drand round, the tab's
-   refund time; your browser checks 32 of the 64 sealed pieces before you pay. You fund the address with one
-   ordinary shielded payment.
-2. **Pay.** Every 10 seconds your browser signs an IOU: a signed note that lets the service take this much.
-   Each one is a complete shielded transaction paying the service the running total and you the rest, with
-   your half of the signature. The service checks it, keeps only the newest, and serves you. Nothing goes on
-   chain.
-3. **Close.** Together: one transaction pays the service what you used and returns the rest. If you vanish,
-   the service closes alone with your newest IOU before the refund time. If the service vanishes, the drand
-   round opens its sealed share at the refund time and your browser refunds you alone.
+1. **Open.** Your device and the service run FROST distributed key generation for a new Ironwood address that
+   neither can spend alone. The service seals its key share to a future drand round, the tab's refund time,
+   and your device checks 32 of 64 sealed pieces before you pay. You fund the address from any wallet.
+2. **Pay.** Every 10 seconds (or per request) your device signs an IOU: a complete shielded transaction
+   paying the service the running total and you the rest, with your half of the signature. The service checks
+   it against the chain, keeps only the newest and serves you. Nothing goes on chain.
+3. **Close.** Together, one transaction pays the service what you used. If you vanish, the service closes alone
+   with your newest IOU; if it is down, a watchtower holding no keys publishes that close. If the service
+   vanishes, drand opens its sealed share at the refund time and your device refunds you alone.
 
 ```
- wallet ──1 payment──▶ tab address (2-of-2)                 service
-                          │                                    │
- browser ── IOU every 10 s (signed total, off-chain) ────────▶ │ checks, keeps newest, serves VPN / chat / API
-                          │                                    │
+ wallet ──1 payment──▶ tab address (2-of-2)                    service
+                          │                                       │
+ device ── IOU every 10 s (signed running total, off-chain) ────▶ │ checks, keeps newest, serves
+                          │                                       │
                           └── close: 1 transaction ─▶ service gets what you used, you get the rest
                               or refund alone after the time seal opens
 ```
 
-| Who could cheat | How | Why they can't |
+## Who sees what
+
+| | Sees | Never sees |
 |---|---|---|
-| The service | Take more than you used | It can only finish an IOU you signed; you sign only the running total |
-| The service | Keep your money locked | After the refund time you refund alone with the opened seal |
-| The service | Seal a fake share | Your browser checks 32 of 64 pieces first: a cheat passes with probability `2^-60.7` |
-| You | Stop paying and keep the VPN | The VPN cuts within 30 seconds; the service closes with your newest IOU |
-| You | Refund early | The seal opens only at the refund time; before that your share alone is not a valid signature |
-| Anyone | Close a tab twice | The network's nullifier rule rejects the second spend |
+| **The public chain** | Two shielded transactions per tab | Amounts, parties, that a tab existed, how many payments happened |
+| **The service** | This tab's payments and their times; your IP address, as any VPN does | Who you are, your wallet balance, your other addresses; your key, so it can't take more than you signed |
+| **The public Zcash server** | Our relay asking for whole block ranges | Your IP address; which notes are yours (your device decrypts them) |
+| **The watchtower** | Finished close transactions | Keys, shares, nonces, the service database |
 
-## Guarantees
+We measured the shape of mainnet Ironwood traffic (`tidvar measure`, 9,716 transactions in 2,000 blocks,
+`evidence/mainnet/privacy/`): 86.5% have exactly 2 actions, like a Tidvar open and close, and the most common
+expiry gap is the 40 blocks a cooperative close uses.
 
-Each property has the file that enforces it and a test or a recorded run ([protocol §8](docs/protocol.md)).
+| Not claimed | Why |
+|---|---|
+| Anonymity from the service at the IP level | A VPN service always sees your IP |
+| Unlinking the payments inside one tab | They belong to one tab by design: open a new tab per session to split them |
+| Protection if drand's threshold of operators colludes to publish early | The time seal relies on it |
 
-| | Property | Shown by |
+## Who holds which key
+
+| Key | Lives in | Can | Can never |
+|---|---|---|---|
+| Your key share and 24 backup words | your device, encrypted (AES-GCM) in IndexedDB and in your backup file | sign IOUs and, after the refund time, the refund alone | leave your device unencrypted |
+| The service's key share | the service database (mode 600) | complete the newest IOU you signed | sign more than you signed, or anything alone before the refund time |
+| The service's sealed share | encrypted to drand's future round | open at the refund time, for you | open early |
+| Your return address | the signed tab record | receive your change at close or refund | be changed by the service |
+| Agent tab key | `~/.tidvar-agent` (mode 600) | pay up to the tab's size and the per-request cap | exceed them |
+
+## Attacks: what is refused
+
+| Attack | Result | Shown by |
 |---|---|---|
-| S1 | The service never receives more than the newest amount you signed | `at2_forged_payer_share_cannot_be_aggregated` |
-| S2 | You cannot spend the tab alone before the refund time | `at1_another_rounds_signature_cannot_stand_in_for_the_refund_round`, `at12_forged_round_signature_fails_bls_verification` |
-| S3 | After the refund time, you can always get your money back alone | runs 10 and 13 |
-| S4 | The service can always close with your newest IOU, even with its API down | runs 09 and 11 |
-| S5 | No signing nonce is used twice | each nonce is erased once used or replaced (`crates/tidvar-payee/src/store.rs`) |
-| S6 | A message for one tab is refused for another | `at13_message_for_one_tab_is_refused_for_another` |
-| S7 | A tab cannot be paid out twice | network nullifier rule |
-
-## Privacy
-
-What each party learns is in the [threat model](docs/security.md). On chain, a tab is two shielded transactions.
-We measured their shape against 2,000 recent mainnet blocks (`tidvar measure`, `evidence/mainnet/privacy/`):
-86.5% of 9,716 Ironwood-only transactions have exactly 2 actions, like a Tidvar open and close; the most common
-expiry gap is 40 blocks, the one a cooperative close uses.
-
-| Real | With a boundary | Not claimed |
-|---|---|---|
-| Payments below the network fee, instant | The browser syncs through our relay, so the public Zcash server never sees your IP; we do, as any VPN does | Anonymity from the service at the IP level (a VPN service always sees your IP) |
-| 2-of-2 lock; refund after the time seal | One tab's payments are linked to that tab: open a new tab per session to split them | Protection if drand's threshold colludes to publish early |
-| Prompts are answered on our server and never stored | A forced or watchtower close carries a far expiry, so it can stand out; cooperative closes do not | Two-way tabs or routing between services |
-| | If you vanish without closing, the service keeps what you prepaid: the 1, 8 or 24 hours of VPN you chose to keep paid while away (600 to 14,400 zat) | Outside user numbers (we report only our own runs) |
+| The service takes more than you signed (forged payer share) | Aggregation fails | `at2_forged_payer_share_cannot_be_aggregated` |
+| You refund before the refund time | The seal does not open; your share alone is not a signature | `at1_another_rounds_signature_cannot_stand_in_for_the_refund_round`, `at12_forged_round_signature_fails_bls_verification` |
+| A rogue key in the setup | Setup aborts | `at7_rogue_dkg_package_aborts_the_setup` |
+| A message from one tab presented for another | Refused | `at13_message_for_one_tab_is_refused_for_another` |
+| Using the VPN after payments stop | Internet cut in 12.8–27.8 s; the tunnel stays up so the page can still pay or close | testnet runs 02–07, mainnet run 02 |
+| Closing a tab twice / refunding a closed tab | Rejected by the network's nullifier rule; the page explains | the service and page checks |
+| An agent asked to pay more than its limits | Refused before signing: the per-request cap (run 17) and the tab's size (run 14) | testnet runs 14 and 17 |
+| Malformed messages | 486 million fuzz inputs across 8 decoders, 0 crashes | `crates/tidvar-core/fuzz` |
 
 ## Developer kit
 
-Charge for any route in an axum service, 2,000 zat a request ([kit](docs/kit.md)):
-
-```rust
-let paywall = tidvar_402::Paywall::open(&Path::new(&data).join("payee.sqlite"), &offer, 2_000)?;
-let app = Router::new()
-    .route("/paid/fact", get(|| async { "A Zcash payment channel moves value off chain and settles in one shielded transaction." }))
-    .layer(from_fn_with_state(paywall, tidvar_402::charge));
-```
-
-In the browser, `await tab.fetchPaid(url, progress)` pays and returns the body. A retried request is never
-charged twice: the charge and the signed reply are one database transaction. Every 402 also speaks
-**x402 v2** (`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`, scheme `tidvar-tab`).
-
-**Any existing API, no code change.** Proxy mode puts an HTTP API behind tab payments by pointing at it:
+Put an existing API behind tab payments, without changing it:
 
 ```sh
 TIDVAR_UPSTREAM=http://127.0.0.1:3000 TIDVAR_ROUTES='/api/search=3000,/api/*=500' tidvar-kit-demo
 ```
 
-Live on both services: an unmodified llama.cpp server's OpenAI chat API at
-`/llm/v1/chat/completions`, 1,000 zat a call.
+Or price a route inside an axum service:
 
-An agent with a hard spending limit, also as an MCP server (`tidvar-agent mcp`):
+```rust
+let paywall = tidvar_402::Paywall::with_routes(&store, &offer, vec![("/api/*".into(), 500)])?;
+let app = Router::new().route("/api/answer", get(answer)).layer(from_fn_with_state(paywall, tidvar_402::charge));
+```
+
+An unpaid request gets `402 Payment Required` with `Tidvar-Price` and an x402 v2 `PAYMENT-REQUIRED` header
+(scheme `tidvar-tab`). The payer signs a charge on its tab and retries with `Tidvar-Request` or x402
+`PAYMENT-SIGNATURE`; the charge and the signed reply are one database transaction, so a retry is never
+charged twice.
+
+An agent with a hard budget, from a shell or as an MCP tool in any MCP client:
 
 ```sh
 tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
 tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
   --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close
-node packages/tidvar-agent/agent.mjs mcp   # the same tab as a tool in any MCP client
+node packages/tidvar-agent/agent.mjs mcp   # tab_status, ask, fetch_paid, close_tab
 ```
 
-## Attacks tried
-
-| Attack | Result | Test or run |
-|---|---|---|
-| Refund before the refund time with another round's signature | Refused | `at1_another_rounds_signature_cannot_stand_in_for_the_refund_round` |
-| Service aggregates a close with a forged payer share | Refused | `at2_forged_payer_share_cannot_be_aggregated` |
-| Rogue key in the key setup | Setup aborts | `at7_rogue_dkg_package_aborts_the_setup` |
-| Forged drand round signature | BLS check fails | `at12_forged_round_signature_fails_bls_verification` |
-| A message from one tab presented for another | Refused | `at13_message_for_one_tab_is_refused_for_another` |
-| VPN use after payments stop | Cut in 12.8–27.8 s; Pause in about 1 s | runs 02–07 |
-| Refund after the service closed | Refused by the network; the page explains | page check, nullifier rule |
-| Malformed messages | 486 million fuzz inputs across 8 decoders, 0 crashes | `crates/tidvar-core/fuzz` |
+In the browser: `await tab.fetchPaid(url, progress, {method, body}, maxPrice)`. Full reference:
+[docs/kit.md](docs/kit.md).
 
 ## Engineering decisions
 
 - **No consensus change.** The lock is a FROST 2-of-2 key over one Ironwood note. Every payment is an
   unproven transaction plus a signature share, so it costs milliseconds; only the close is proven.
 - **The refund is a time seal, not a script.** Zcash has no shielded time locks, so the service's share is
-  encrypted to a drand round (tlock) with a cut-and-choose check, and the browser can rebuild the full key after
-  that round.
-- **Two network upgrades at once.** Mainnet runs NU6.3 and testnet already runs NU7; every transaction uses the
-  consensus branch of its target height, and IOUs switch automatically when NU7 activates.
-- **The browser is the wallet.** Compact blocks are decrypted in the browser through our relay; keys, IOUs and
-  backups never leave the device unencrypted.
+  encrypted to a drand round (tlock) with a cut-and-choose check, and your device rebuilds the full key
+  after that round.
+- **Two network upgrades at once.** Mainnet runs NU6.3 and testnet already runs NU7; every transaction uses
+  the consensus branch of its target height, and IOUs switch automatically when NU7 activates.
+- **The device is the wallet.** Compact blocks are decrypted on your device through our relay; keys, IOUs
+  and backups never leave it unencrypted.
 - **Exactly once.** Each request is saved before it is sent and the service keeps its exact reply, so a retry
   after a dropped connection never pays or charges twice.
+- **A VPN that can't trap you.** A paused or unpaid tunnel stays connected but cut off from the internet, so
+  the page can always reach the service to resume, pay or close with WireGuard on.
 
 ## Build and check
 
@@ -223,7 +217,8 @@ Running a service: [operations](docs/operations.md).
 | `crates/tidvar-chain` | Light-client transport, note decryption, witnesses, broadcast |
 | `crates/tidvar-payer` | The payer's signing state and backups (native and WebAssembly) |
 | `crates/tidvar-payee` | The service's shares, payment checks, ledger and proofs |
-| `crates/tidvar-402`, `crates/tidvar-cli` | The paywall layer; `tidvar verify`, `measure`, `send-refund` |
+| `crates/tidvar-402`, `services/kit-demo` | The paywall layer (per-path prices, x402 v2) and the proxy for any HTTP API |
+| `crates/tidvar-cli` | `tidvar verify`, `measure`, `send-refund` |
 | `services/api`, `services/vpn`, `watch` | The service, the WireGuard controller, the watchtower |
 | `packages/tidvar-web`, `packages/tidvar-agent`, `web` | The browser kit, the agent, the app |
 

@@ -1,0 +1,17 @@
+{
+  "name": "17-agent-pays-an-openai-api-over-x402",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "3aa029e669ccd273a75b61a18fe42bfd5f8693ad8bfc49af3ada74e01c0feab1",
+      "height": 4551627
+    },
+    {
+      "role": "close",
+      "txid": "82b0b0accf6bf1feda705823a2e7210ad7801d80fd37a96210aaad9c2fc34c1a",
+      "height": 4551631
+    }
+  ]
+}

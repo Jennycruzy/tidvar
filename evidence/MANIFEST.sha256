@@ -42,3 +42,7 @@ dea075929d10d8c479c02afed2d8b2ae1d795c351c760b26369af1fb3d000265  testnet/runs/1
 63e8550322698f30649deed1d930e1108aa7ae0217345b8384394c95a113ff6d  testnet/runs/15-top-up-then-renew.md
 3430776784124ffc89a77ba1c70ad7b7b756d632601abae55de14745d0b74bba  testnet/runs/16-renewed-tab-close.json
 5deaa0599ba8a5a304f366b65e39167016b6aae9b89192c87c4a985a4a9f9449  testnet/runs/16-renewed-tab-close.md
+e65c343d27825e74e3dfbddad9fcfec69b6f589be2b298875c39937caec1877d  testnet/runs/17-agent-pays-an-openai-api-over-x402.json
+8770f365a97519fa902d079222dede26791bed4c60729242be94d24a3c3241b2  testnet/runs/17-agent-pays-an-openai-api-over-x402.md
+5b7df37eaabc2d7215a40b40600946274870480124e1f80d2cf99a89b8dc99c3  testnet/runs/18-vpn-kept-paid-eight-hours-ahead.json
+b58ef714256af4e93b960cb28e9add9bb14873e7a9589d81cc44c3db8366d4c1  testnet/runs/18-vpn-kept-paid-eight-hours-ahead.md

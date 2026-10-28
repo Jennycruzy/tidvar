@@ -1,0 +1,1 @@
+A browser tab chose to keep the VPN paid 8 hours ahead and was then hidden: one payment raised the signed amount from 4 to 4,800 zat (8 hours of VPN). The VPN was never used, so the close paid the service 0 zat and returned everything but the network fee.
