@@ -15,7 +15,11 @@
       <a href="/open">Open a tab</a>
       <a href="/check">Check it yourself</a>
       <a href="https://github.com/Jennycruzy/tidvar">Code</a>
-      <span class="network"><span class="dot" aria-hidden="true"></span><span class="net">TESTNET</span> · <span class="unit">TAZ</span> only</span>
+      <div class="netswitch" role="group" aria-label="Network">
+        <a id="net-main" href="https://mainnet.tidvar.38-49-216-59.sslip.io/"><span class="dot" aria-hidden="true"></span>Mainnet</a>
+        <a id="net-test" href="https://tidvar.38-49-216-59.sslip.io/"><span class="dot" aria-hidden="true"></span>Testnet</a>
+      </div>
+      <span class="network sr-only"><span class="net">TESTNET</span> · <span class="unit">TAZ</span> only</span>
     </nav>
   </div>
 </header>
@@ -60,6 +64,18 @@
       <li class="reveal"><span class="step-n">2</span><strong>Use</strong><span>Every payment is a signed running total: a note that lets the service take this much. It costs milliseconds and nothing goes on chain.</span></li>
       <li class="reveal"><span class="step-n">3</span><strong>Close</strong><span>One transaction pays the service what you used and returns the rest. If the service vanishes, the seal opens at the refund time and you take everything back alone.</span></li>
     </ol>
+  </section>
+
+  <section class="l-section">
+    <p class="eyebrow reveal">Who sees what</p>
+    <h2 class="l-h2 reveal">One tab, seen from every side.</h2>
+    <p class="lede reveal">The same tab of 400 payments, from the point of view of everyone who touches it. Nothing below is a promise: each line follows from what that party's own software receives.</p>
+    <div class="l-views">
+      <article class="l-view reveal"><h3>The public chain</h3><p class="l-sees">Sees</p><ul><li>Two shielded transactions, shaped like 86.5% of Ironwood traffic</li></ul><p class="l-never">Never sees</p><ul><li>Amounts, sender, receiver</li><li>That a tab existed, or that 400 payments happened</li></ul></article>
+      <article class="l-view reveal"><h3>The service</h3><p class="l-sees">Sees</p><ul><li>This tab's payments and their times</li><li>Your IP address, as any VPN does</li></ul><p class="l-never">Never sees</p><ul><li>Who you are, your wallet balance, your other addresses</li><li>Your key, so it can't take more than you signed</li></ul></article>
+      <article class="l-view reveal"><h3>The Zcash server</h3><p class="l-sees">Sees</p><ul><li>Our relay asking for whole block ranges</li></ul><p class="l-never">Never sees</p><ul><li>Your IP address</li><li>Which notes are yours: your device decrypts them</li></ul></article>
+      <article class="l-view reveal l-view-you"><h3>You</h3><p class="l-sees">Hold</p><ul><li>Your half of the key and 24 backup words</li><li>A refund you can sign alone at the refund time</li></ul><p class="l-never">Never need</p><ul><li>An account, an email or a card</li><li>To trust the service with your money</li></ul></article>
+    </div>
   </section>
 
   <section class="l-section">

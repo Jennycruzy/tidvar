@@ -94,6 +94,15 @@ copyWords("renew-phrase", "copy-renew-phrase");
   // before its payment goes out.
   away.onchange=()=>{try{localStorage.setItem("tidvar-away-ms",away.value);}catch{/* storage unavailable */}void call("away",Number(away.value)).then(()=>{if(!element("vpn").hidden)return payOnce(true);}).catch(()=>undefined);};
 }
+// The network switch: the same page on the other network's service.
+{
+  const mainnet = location.hostname === "tidvar.site" || location.hostname.startsWith("mainnet.");
+  const path = location.pathname + location.search;
+  const main = element<HTMLAnchorElement>("net-main"), test = element<HTMLAnchorElement>("net-test");
+  main.href = (location.hostname === "tidvar.site" || location.hostname === "www.tidvar.site" ? "https://tidvar.site" : main.href.replace(/\/$/, "")) + path;
+  test.href = test.href.replace(/\/$/, "") + path;
+  (mainnet ? main : test).setAttribute("aria-current", "true");
+}
 // The landing page at "/": product first, the app stays at /open.
 const landing = location.pathname === "/";
 if (landing) {
