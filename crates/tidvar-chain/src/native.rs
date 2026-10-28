@@ -68,6 +68,11 @@ impl Client {
         {
             return Err(ChainError::Network);
         }
+        tidvar_core::record::observe_branch(
+            self.network,
+            &info.consensus_branch_id,
+            info.block_height,
+        );
         Ok(info)
     }
     pub async fn latest(&mut self) -> Result<service::BlockId, ChainError> {

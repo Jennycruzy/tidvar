@@ -13,6 +13,7 @@ export class Tab {
   private pool: Commitment[] = [];
   private tree?: {height: bigint; bytes: Uint8Array<ArrayBuffer>};
   private refreshedAt = 0;
+  private branchCheckedAt = 0;
   private balance?: Balance;
   private prompt?: string;
   private answer: string | null = null;
@@ -184,6 +185,12 @@ export class Tab {
       available=this.pool.filter(value=>payer.commitment_unused(JSON.stringify(value)));
     }
     if(available.length<count)throw new Error("Fresh signing values are not available. Keep your backup and retry.");
+    if(Date.now()-this.branchCheckedAt>5*60*1000){
+      // The network upgrade in force decides which transaction format the IOU uses.
+      const wasm=await loadWasm();
+      wasm.observe_info(await relay("GetLightdInfo",wasm.info_request()));
+      this.branchCheckedAt=Date.now();
+    }
     const started=performance.now();
     const prepared=JSON.parse(payer.prepare_transaction(amount,false)) as {anchor_height:number};
     const height=BigInt(prepared.anchor_height);

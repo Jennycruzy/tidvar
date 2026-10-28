@@ -143,6 +143,9 @@ pub async fn pack(app: &App, tab_id: [u8; 32]) -> Result<String, Failure> {
 pub async fn watch_deadlines(app: App) {
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
+        // Keeps the network upgrade in force current for IOU checks (mainnet NU7).
+        let mut client = app.chain.lock().await.clone();
+        let _ = client.info().await;
         let packing = now().and_then(|now| {
             app.store
                 .lock()

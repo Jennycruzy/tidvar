@@ -8,9 +8,50 @@ use pasta_curves::pallas::Point;
 use rand_core::{CryptoRng, RngCore};
 use reddsa::{Signature, SigningKey, VerificationKey, orchard::SpendAuth};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 use zcash_address::unified::{self, Container, Encoding};
-use zcash_protocol::consensus::{self, BlockHeight, BranchId, NetworkType};
+use zcash_protocol::consensus::{self, BlockHeight, BranchId, NetworkType, NetworkUpgrade};
+
+/// The lowest mainnet height a Zcash server has reported running NU7 (0: not seen yet).
+/// NU7's mainnet height was not scheduled in the pinned library; this lets every tab
+/// switch to NU7 transactions as soon as the chain does, without a code change.
+static MAINNET_NU7: AtomicU32 = AtomicU32::new(0);
+
+/// Records that a Zcash server reported this network's tip at `height` on `branch`.
+pub fn observe_branch(network: Network, branch: &str, height: u64) {
+    if network != Network::Mainnet || branch != "77190ad9" {
+        return;
+    }
+    let Ok(height) = u32::try_from(height) else {
+        return;
+    };
+    let mut seen = MAINNET_NU7.load(Ordering::Relaxed);
+    while seen == 0 || height < seen {
+        match MAINNET_NU7.compare_exchange(seen, height, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => break,
+            Err(actual) => seen = actual,
+        }
+    }
+}
+/// Consensus parameters for a tab: the library's, plus mainnet NU7 once observed.
+#[derive(Clone, Copy, Debug)]
+pub struct Consensus(Network);
+impl consensus::Parameters for Consensus {
+    fn network_type(&self) -> NetworkType {
+        self.0.kind()
+    }
+    fn activation_height(&self, upgrade: NetworkUpgrade) -> Option<BlockHeight> {
+        match (self.0, upgrade) {
+            (Network::Mainnet, NetworkUpgrade::Nu7) => match MAINNET_NU7.load(Ordering::Relaxed) {
+                0 => None,
+                height => Some(BlockHeight::from_u32(height)),
+            },
+            (Network::Mainnet, upgrade) => consensus::MAIN_NETWORK.activation_height(upgrade),
+            (Network::Testnet, upgrade) => consensus::TEST_NETWORK.activation_height(upgrade),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Network {
@@ -24,11 +65,8 @@ impl Network {
             Self::Testnet => NetworkType::Test,
         }
     }
-    pub fn consensus(self) -> consensus::Network {
-        match self {
-            Self::Mainnet => consensus::Network::MainNetwork,
-            Self::Testnet => consensus::Network::TestNetwork,
-        }
+    pub fn consensus(self) -> Consensus {
+        Consensus(self)
     }
     /// The lightwalletd chain name for this network.
     pub fn chain_name(self) -> &'static str {
@@ -441,6 +479,32 @@ mod network_tests {
         assert_eq!(Network::from_name("mainnet"), Some(Network::Mainnet));
         assert_eq!(Network::from_name("test"), Some(Network::Testnet));
         assert_eq!(Network::from_name("regtest"), None);
+    }
+
+    #[test]
+    fn mainnet_switches_to_nu7_when_a_server_reports_it() {
+        // Testnet branch ids are ignored for mainnet, and NU6.3 reports change nothing.
+        observe_branch(Network::Testnet, "77190ad9", 3_900_000);
+        observe_branch(Network::Mainnet, "37a5165b", 3_900_000);
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_900_001),
+            Some(BranchId::Nu6_3)
+        );
+        observe_branch(Network::Mainnet, "77190ad9", 3_900_000);
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_900_001),
+            Some(BranchId::Nu7)
+        );
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_899_999),
+            Some(BranchId::Nu6_3)
+        );
+        // A later report never moves the activation forward.
+        observe_branch(Network::Mainnet, "77190ad9", 3_950_000);
+        assert_eq!(
+            Network::Mainnet.ironwood_branch(3_900_001),
+            Some(BranchId::Nu7)
+        );
     }
 
     #[test]

@@ -267,6 +267,27 @@ pub fn latest_request() -> Result<Vec<u8>, JsValue> {
     tidvar_chain::transport::request(&tidvar_chain::service::ChainSpec {}).map_err(error)
 }
 #[wasm_bindgen]
+pub fn info_request() -> Result<Vec<u8>, JsValue> {
+    tidvar_chain::transport::request(&tidvar_chain::service::Empty {}).map_err(error)
+}
+/// Lets this browser switch to NU7 transactions once the chain reports it.
+#[wasm_bindgen]
+pub fn observe_info(reply: &[u8]) -> Result<String, JsValue> {
+    let info: tidvar_chain::service::LightdInfo =
+        tidvar_chain::transport::unary(reply).map_err(error)?;
+    let network = match info.chain_name.as_str() {
+        "main" => tidvar_core::record::Network::Mainnet,
+        "test" => tidvar_core::record::Network::Testnet,
+        _ => {
+            return Err(JsValue::from_str(
+                "The Zcash server is on an unknown network.",
+            ));
+        }
+    };
+    tidvar_core::record::observe_branch(network, &info.consensus_branch_id, info.block_height);
+    Ok(info.consensus_branch_id)
+}
+#[wasm_bindgen]
 pub fn latest_height(reply: &[u8]) -> Result<u64, JsValue> {
     let value: tidvar_chain::service::BlockId =
         tidvar_chain::transport::unary(reply).map_err(error)?;
