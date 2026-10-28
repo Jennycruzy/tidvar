@@ -1,0 +1,9 @@
+{
+  "name": "tidvar-agent",
+  "version": "0.1.0",
+  "description": "An AI agent pays services from one Tidvar tab; the tab is its hard spending limit (MCP stdio server)",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "bin": {"tidvar-agent": "agent.mjs"},
+  "engines": {"node": ">=22"}
+}

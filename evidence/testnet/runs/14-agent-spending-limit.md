@@ -1,0 +1,1 @@
+tidvar-agent opened its own 0.0005 TAZ tab on the public page and paid for 29 Tidvar Chat answers (1,000 zat each). The 30th was refused by the tab itself ("The payment amount exceeds the tab limit."). The close paid the service exactly 29,000 zat and returned 11,000.

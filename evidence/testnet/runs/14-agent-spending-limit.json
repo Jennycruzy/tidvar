@@ -1,0 +1,17 @@
+{
+  "name": "14-agent-spending-limit",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "679544140c918a3011d2da53829fda3f55abbb6539770273995cfd08f1eec6e3",
+      "height": 4549198
+    },
+    {
+      "role": "close",
+      "txid": "4c43bb2421808c7effc48b775cbbc3c87515e2481c3f1fedc8e56babeb3bff82",
+      "height": 4549217
+    }
+  ]
+}

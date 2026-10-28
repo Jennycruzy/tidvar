@@ -32,3 +32,5 @@ bf59104d7379a13b1b642b4f8e3f1c0c7d0ffeb34788260a3490a3aaf450b68b  testnet/runs/1
 8b3e901ee353e3f1d8b18ab484f56b008ef1beadc706e55743aae24022e14662  testnet/runs/12-public-page-chat-and-paid-api.md
 2475d2bd82d81726699e7fdec7ea7a264e8c830aa1311ffcfc0398660b1410a9  testnet/runs/13-refund-after-slow-funding.json
 5753af3e9fab36b067a3132ded2d0e7e47c4bd6ef531a3a33b22f0ef436e6db5  testnet/runs/13-refund-after-slow-funding.md
+dea075929d10d8c479c02afed2d8b2ae1d795c351c760b26369af1fb3d000265  testnet/runs/14-agent-spending-limit.json
+58a60ada95fd43fd4973c98a3e52d57f78087c90b0bc3b5b8eac3569a7962522  testnet/runs/14-agent-spending-limit.md
