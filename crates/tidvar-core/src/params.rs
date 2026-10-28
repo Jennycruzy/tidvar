@@ -9,6 +9,8 @@ pub const MAXIMUM_MONEY: u64 = 2_100_000_000_000_000;
 pub const IOU_INTERVAL_MS: u64 = 10_000;
 pub const VISIBLE_ADVANCE_MS: u64 = 20_000;
 pub const AWAY_ADVANCE_MS: u64 = 3_600_000;
+/// The longest a payer may prepay when leaving the page: 24 hours is 14,400 zat of VPN.
+pub const MAXIMUM_AWAY_ADVANCE_MS: u64 = 24 * 3_600_000;
 pub const CUT_GRACE_MS: u64 = 5_000;
 /// One chat answer: 1,000 zatoshi (about one cent).
 pub const CHAT_PRICE: u64 = 1_000;
@@ -120,15 +122,26 @@ pub fn vpn_used(elapsed_ms: u64) -> Result<Amount, AmountError> {
 }
 
 pub fn payment_target(funded: Amount, used: Amount, hidden: bool) -> Result<Amount, AmountError> {
-    let maximum = spendable(funded)?;
-    if used > maximum {
-        return Err(AmountError::Used);
-    }
     let advance = if hidden {
         AWAY_ADVANCE_MS
     } else {
         VISIBLE_ADVANCE_MS
     };
+    payment_target_ahead(funded, used, advance)
+}
+
+/// The amount to sign so the VPN stays paid for `advance_ms` from now, kept between the visible
+/// lead and 24 hours, and never above what the tab can pay.
+pub fn payment_target_ahead(
+    funded: Amount,
+    used: Amount,
+    advance_ms: u64,
+) -> Result<Amount, AmountError> {
+    let maximum = spendable(funded)?;
+    if used > maximum {
+        return Err(AmountError::Used);
+    }
+    let advance = advance_ms.clamp(VISIBLE_ADVANCE_MS, MAXIMUM_AWAY_ADVANCE_MS);
     Amount::try_from(
         used.0
             .saturating_add(advance.div_ceil(VPN_UNIT_MS))
@@ -330,6 +343,17 @@ mod tests {
             iou_expiry(4_536_866, Lifetime::Days3.seconds() * 1000)?,
             4_549_866
         );
+        let funded = Amount::try_from(100_000)?;
+        let used = Amount::try_from(10)?;
+        assert_eq!(
+            payment_target_ahead(funded, used, 8 * 3_600_000)?.value(),
+            10 + 4_800
+        );
+        assert_eq!(
+            payment_target_ahead(funded, used, u64::MAX)?.value(),
+            10 + 14_400
+        );
+        assert_eq!(payment_target_ahead(funded, used, 0)?.value(), 10 + 4);
         assert!(Deadlines::new(u64::MAX, 900_000).is_err());
         assert!(iou_expiry(MAXIMUM_EXPIRY, 1).is_err());
         Ok(())

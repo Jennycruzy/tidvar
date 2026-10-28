@@ -27,6 +27,7 @@ export interface Payer {
   prepare_renew_request(prepared: string, services: string, tree: Uint8Array, to: string, next_id: string): string;
   received(): string;
   payment_target(now: bigint, hidden: boolean, serviceUsed: bigint): bigint;
+  payment_target_ahead(now: bigint, advanceMs: bigint, serviceUsed: bigint): bigint;
   authorization_balance(now: bigint): string;
   backup_plaintext(): Uint8Array;
   start_sync(reply: Uint8Array): void;

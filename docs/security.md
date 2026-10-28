@@ -16,7 +16,8 @@ Properties S1–S9 are defined in [protocol.md](protocol.md#8-safety-properties)
 ## Adversaries
 
 **A malicious service.** It can stop serving at any time, so the person's prepaid time is lost: at most 20
-seconds of VPN while the page is open, 60 minutes (600 zat) while it is hidden, or one 1,000-zat chat answer.
+seconds of VPN while the page is open, the period the person chose to prepay while it is hidden (1, 8 or
+24 hours: 600, 4,800 or 14,400 zat), or one 1,000-zat chat answer.
 It cannot take more than the newest amount the payer signed (S1). It cannot keep the money locked: after the
 refund time, the payer refunds alone (S3). It cannot fake the sealed share, because the payer checks 32 of 64
 openings before paying, which gives a cheating service a `2^-60.7` chance (§3 of the protocol). It cannot charge

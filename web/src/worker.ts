@@ -6,6 +6,8 @@ configureWasm("/pkg/tidvar_payer.js");
 let opening = new Opening();
 let tab: Tab | undefined;
 let nextOpening: Opening | undefined;
+// How long a payment made while the page is hidden keeps the VPN paid (set by the page).
+let awayMs = 3_600_000;
 const chain = (height: bigint, value: bigint) => host.postMessage({chain: {height: Number(height), value: Number(value)}});
 function current(): Tab {if (!tab) throw new Error("Open or recover a tab first."); return tab;}
 function meter(): unknown {
@@ -50,7 +52,8 @@ host.onmessage = async event => {
       const wasm=performance.getEntriesByType("resource").filter(entry=>entry.name.includes("_bg.wasm")).at(-1) as PerformanceResourceTiming|undefined;
       host.postMessage({observation:{step:"sync",elapsedMs:performance.now()-started,heapBytes:memory,wasmBytes:wasm?.decodedBodySize ?? null}});
     }
-    else if (type === "pay") result = {payment: await current().pay(Boolean(value), chain) ?? null, meter: meter()};
+    else if (type === "away") {awayMs=Math.min(86_400_000,Math.max(20_000,Number(value)||3_600_000));result=awayMs;}
+    else if (type === "pay") {const tab=current();tab.awayMs=awayMs;result = {payment: await tab.pay(Boolean(value), chain) ?? null, meter: meter()};}
     else if (type === "refund") {
       // The refund needs no service: a public drand beacon opens the service's sealed share.
       await opening.sync(chain);

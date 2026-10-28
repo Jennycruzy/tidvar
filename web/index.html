@@ -121,6 +121,8 @@
       <div class="tile tile-wide"><dt>On chain</dt><dd id="meter-chain">1 transaction so far</dd></div>
     </dl>
     <p class="hint">VPN: 1 zat every 6 seconds, paid off-chain every 10 seconds while this page is open. Stop paying and the VPN cuts off within seconds.</p>
+    <label>When I leave this page, keep the VPN paid for<select id="away"><option value="3600000">1 hour (600 zat)</option><option value="28800000">8 hours (4,800 zat)</option><option value="86400000">24 hours (14,400 zat)</option></select></label>
+    <p class="hint">Close the app or lock your phone: the VPN keeps running for this long. Time you don't use comes back to you when you close the tab.</p>
     <div class="actions">
       <button id="vpn-setup" class="primary">Set up WireGuard</button>
       <button id="vpn-pause" class="secondary" hidden>Pause VPN</button>

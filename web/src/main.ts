@@ -85,6 +85,13 @@ function copyWords(source: string, button: string): void {
 }
 copyWords("phrase", "copy-phrase");
 copyWords("renew-phrase", "copy-renew-phrase");
+// How long the VPN stays paid while this page is hidden; remembered on this device.
+{
+  const away=element<HTMLSelectElement>("away");
+  try{const saved=localStorage.getItem("tidvar-away-ms");if(saved && [...away.options].some(o=>o.value===saved))away.value=saved;}catch{/* storage unavailable */}
+  void call("away",Number(away.value)).catch(()=>undefined);
+  away.onchange=()=>{try{localStorage.setItem("tidvar-away-ms",away.value);}catch{/* storage unavailable */}void call("away",Number(away.value)).catch(()=>undefined);};
+}
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
   protect.disabled = true;error.textContent = "";progress.textContent = "Protecting this tab on your device.";

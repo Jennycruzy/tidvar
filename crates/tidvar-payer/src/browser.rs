@@ -552,6 +552,19 @@ impl BrowserPayer {
             .payment_target(now_ms, hidden, service_used)
             .map_err(error)
     }
+    pub fn payment_target_ahead(
+        &mut self,
+        now_ms: u64,
+        advance_ms: u64,
+        service_used: u64,
+    ) -> Result<u64, JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        payer
+            .payment_target_ahead(now_ms, advance_ms, service_used)
+            .map_err(error)
+    }
     pub fn authorization_balance(&mut self, now_ms: u64) -> Result<String, JsValue> {
         let State::Ready(payer) = &mut self.state else {
             return Err(wrong_state());

@@ -990,6 +990,20 @@ impl Payer {
         hidden: bool,
         service_used: u64,
     ) -> Result<u64, PayerError> {
+        let advance = if hidden {
+            tidvar_core::params::AWAY_ADVANCE_MS
+        } else {
+            tidvar_core::params::VISIBLE_ADVANCE_MS
+        };
+        self.payment_target_ahead(now_ms, advance, service_used)
+    }
+    /// Like `payment_target`, for a chosen prepaid period when the page is left.
+    pub fn payment_target_ahead(
+        &mut self,
+        now_ms: u64,
+        advance_ms: u64,
+        service_used: u64,
+    ) -> Result<u64, PayerError> {
         let funded = tidvar_core::iou::notes_value(&self.spend_notes()?)?;
         let balance = self.authorization_balance(now_ms)?;
         if balance.paused || balance.closing {
@@ -998,7 +1012,7 @@ impl Payer {
         let used = balance.used.min(
             tidvar_core::params::Amount::try_from(service_used).map_err(|_| PayerError::Backup)?,
         );
-        tidvar_core::params::payment_target(funded, used, hidden)
+        tidvar_core::params::payment_target_ahead(funded, used, advance_ms)
             .map(|amount| amount.value())
             .map_err(|_| PayerError::Backup)
     }
