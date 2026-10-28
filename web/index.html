@@ -6,6 +6,9 @@
 <meta name="color-scheme" content="dark light">
 <meta name="description" content="Pay for a VPN by the second and for AI answers by the answer, in private Zcash. The service never holds your money.">
 <title>Tidvar — Open a tab</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ffd36b'/%3E%3Cstop offset='.55' stop-color='%23f4b728'/%3E%3Cstop offset='1' stop-color='%23b9830d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='88' height='88' rx='26' fill='url(%23g)'/%3E%3Ccircle cx='30' cy='56' r='7' fill='%231d1503' opacity='.35'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%231d1503' opacity='.6'/%3E%3Ccircle cx='66' cy='40' r='7' fill='%231d1503'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ffd36b'/%3E%3Cstop offset='.55' stop-color='%23f4b728'/%3E%3Cstop offset='1' stop-color='%23b9830d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='88' height='88' rx='26' fill='url(%23g)'/%3E%3Ccircle cx='30' cy='56' r='7' fill='%231d1503' opacity='.35'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%231d1503' opacity='.6'/%3E%3Ccircle cx='66' cy='40' r='7' fill='%231d1503'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#0a0c0e">
 </head>
 <body>
 <header class="bar">
@@ -25,10 +28,10 @@
 </header>
 <main>
 <section id="landing" hidden>
-  <div class="l-hero">
+  <div class="l-hero"><div class="l-glow" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="l-hero-copy">
       <p class="eyebrow reveal">Off-chain payments on Zcash · shielded · live on mainnet</p>
-      <h1 class="reveal">Pay for exactly what you use.<br><span class="soft">Nobody holds your money.</span></h1>
+      <h1 class="l-title"><span class="w">Pay</span> <span class="w">for</span> <span class="w">exactly</span> <span class="w">what</span> <span class="w">you</span> <span class="w">use.</span><br><span class="soft"><span class="w">Nobody</span> <span class="w">holds</span> <span class="w">your</span> <span class="w">money.</span></span></h1>
       <p class="lede reveal">Open a tab with one private payment. Your browser, your agent or your app then pays by the second or by the request, off-chain and instantly, in amounts smaller than Zcash's own fee. When you're done, one transaction pays the service and sends the rest back to you.</p>
       <div class="l-cta reveal">
         <a class="button primary" href="/open">Open a tab</a>
@@ -119,8 +122,8 @@
     <p class="eyebrow reveal">Why you can trust it</p>
     <h2 class="l-h2 reveal">Checked, attacked, and on chain.</h2>
     <div class="l-stats">
-      <div class="l-stat reveal"><b id="l-stat-tabs">–</b><span>recorded tabs on this network, every transaction re-checkable at <a href="/check">/check</a></span></div>
-      <div class="l-stat reveal"><b>486M</b><span>malformed messages fuzzed across 8 decoders, 0 crashes</span></div>
+      <div class="l-stat reveal"><b id="l-stat-tabs" data-count="0">–</b><span>recorded tabs on this network, every transaction re-checkable at <a href="/check">/check</a></span></div>
+      <div class="l-stat reveal"><b data-count="486186006">486,186,006</b><span>malformed messages fuzzed across 8 decoders, 0 crashes</span></div>
       <div class="l-stat reveal"><b>2<sup>−60</sup></b><span>chance a service passes the sealed-key check while cheating</span></div>
       <div class="l-stat reveal"><b>0</b><span>accounts, cards or custodians: unused value always comes back to you</span></div>
     </div>

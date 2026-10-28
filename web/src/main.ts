@@ -110,7 +110,25 @@ if (landing) {
   document.title = "Tidvar — Pay-per-use on Zcash, nobody holds your money";
   element("landing").hidden = false;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const show = (node: Element) => node.classList.add("in");
+  // Cards in one group arrive one after another.
+  document.querySelectorAll(".l-cards,.l-views,.l-stats,.l-steps").forEach(group =>
+    group.querySelectorAll(":scope > .reveal").forEach((node, index) => {(node as HTMLElement).style.transitionDelay = (index * 0.09) + "s";}));
+  // Numbers count up the first time they come into view.
+  const countUp = (node: HTMLElement) => {
+    const target = Number(node.dataset.count);
+    if (!Number.isFinite(target) || target <= 0 || reduced) return;
+    const started = performance.now(), span = 1400;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - started) / span), eased = 1 - Math.pow(1 - t, 3);
+      node.textContent = Math.round(target * eased).toLocaleString();
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  const show = (node: Element) => {
+    node.classList.add("in");
+    node.querySelectorAll<HTMLElement>("[data-count]").forEach(countUp);
+  };
   if (reduced || !("IntersectionObserver" in window)) document.querySelectorAll(".reveal,.l-bars").forEach(show);
   else {
     const seen = new IntersectionObserver(entries => {
@@ -124,11 +142,13 @@ if (landing) {
     payments += 1;
     element("l-pay-count").textContent = payments.toLocaleString();
     element("l-zat").textContent = (payments * 1).toLocaleString();
+    const meter = document.querySelector(".l-meter");
+    if (meter && !reduced) {meter.classList.remove("tick");void (meter as HTMLElement).offsetWidth;meter.classList.add("tick");}
   };
   if (!reduced) window.setInterval(tick, 600); else {payments = 412;tick();}
   void fetch("/v1/evidence", {credentials: "omit", cache: "no-store"})
     .then(response => response.json())
-    .then((runs: unknown[]) => {element("l-stat-tabs").textContent = String(runs.length);})
+    .then((runs: unknown[]) => {const node = element("l-stat-tabs");node.dataset.count = String(runs.length);node.textContent = String(runs.length);if (node.closest(".in")) countUp(node);})
     .catch(() => {element("l-stat-tabs").textContent = "✓";});
 }
 const protect = element<HTMLButtonElement>("protect");

@@ -188,6 +188,30 @@ summary:hover{color:var(--ink)}
 }
 @media (max-width:360px){.phrase{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* ---------- Landing motion ---------- */
+.l-hero{position:relative;isolation:isolate}
+.l-glow{position:absolute;inset:-80px -120px auto;height:720px;z-index:-1;pointer-events:none;overflow:hidden;filter:blur(60px);opacity:.75}
+.l-glow i{position:absolute;width:420px;height:420px;border-radius:50%;animation:orbit 22s ease-in-out infinite alternate}
+.l-glow i:nth-child(1){left:8%;top:10%;background:radial-gradient(circle,rgba(244,183,40,.28),transparent 65%)}
+.l-glow i:nth-child(2){right:6%;top:0;background:radial-gradient(circle,rgba(61,220,151,.16),transparent 65%);animation-duration:28s;animation-delay:-6s}
+.l-glow i:nth-child(3){left:42%;top:38%;width:300px;height:300px;background:radial-gradient(circle,rgba(255,211,107,.16),transparent 65%);animation-duration:18s;animation-delay:-3s}
+@keyframes orbit{0%{transform:translate(0,0) scale(1)}50%{transform:translate(60px,40px) scale(1.12)}100%{transform:translate(-40px,70px) scale(.95)}}
+.l-title .w{display:inline-block;opacity:0;transform:translateY(22px);animation:word .75s cubic-bezier(.2,.7,.2,1) forwards}
+.l-title .w:nth-child(1){animation-delay:.05s}.l-title .w:nth-child(2){animation-delay:.11s}.l-title .w:nth-child(3){animation-delay:.17s}
+.l-title .w:nth-child(4){animation-delay:.23s}.l-title .w:nth-child(5){animation-delay:.29s}.l-title .w:nth-child(6){animation-delay:.35s}
+.l-title .soft .w:nth-child(1){animation-delay:.5s}.l-title .soft .w:nth-child(2){animation-delay:.56s}.l-title .soft .w:nth-child(3){animation-delay:.62s}.l-title .soft .w:nth-child(4){animation-delay:.68s}
+@keyframes word{to{opacity:1;transform:none}}
+.l-meter.tick .l-meter-num span{animation:bump .45s ease-out}
+@keyframes bump{0%{transform:scale(1)}30%{transform:scale(1.06);text-shadow:0 0 24px rgba(244,183,40,.55)}100%{transform:scale(1)}}
+.l-meter-num span{display:inline-block;transform-origin:left bottom}
+.l-card .l-icon{transition:transform .3s ease}
+.l-card:hover .l-icon{transform:rotate(-8deg) scale(1.08)}
+.l-stat b{font-variant-numeric:tabular-nums}
+.bar-links a{position:relative}
+.bar-links a::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--gold);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.bar-links a:hover::after{transform:scaleX(1)}
+@media (prefers-reduced-motion:reduce){.l-glow i,.l-title .w,.l-meter.tick .l-meter-num span{animation:none!important;opacity:1;transform:none}}
+
 /* ---------- Network switch ---------- */
 .netswitch{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--line-2);border-radius:99px;background:var(--surface)}
 .netswitch a{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;transition:background .2s,color .2s}
