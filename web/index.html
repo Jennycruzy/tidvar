@@ -171,6 +171,7 @@ tidvar-agent close   <span class="c"># the rest returns to you</span></code></pr
   <p class="hint">At least 0.0005. A longer tab means fewer network fees, but a longer wait for your refund if we disappear.</p>
   <label>Return address<input id="return-address" autocomplete="off" spellcheck="false" placeholder="Paste a fresh receive address from your wallet" required></label>
   <p class="hint">What you don't use goes here. A fresh address keeps your tabs unlinked.</p>
+  <button id="use-demo-address" type="button" class="ghost" hidden>No wallet? Use our testnet address</button>
   <button id="protect" type="button" class="primary wide">Protect this tab</button>
   <section id="protection" class="inset" hidden>
     <h3>Save these 24 words privately</h3>
@@ -221,6 +222,7 @@ tidvar-agent close   <span class="c"># the rest returns to you</span></code></pr
       <label>Address<output id="address" class="address"></output></label>
       <label>Amount (<span class="unit">TAZ</span>)<output id="pay-amount" class="big-number"></output></label>
       <div class="actions">
+        <button id="faucet" type="button" class="primary" hidden>Fund it free (testnet coins)</button>
         <a id="wallet" class="button primary">Open in wallet</a>
         <button id="copy-address" class="secondary">Copy address</button>
         <button id="copy-amount" class="secondary">Copy amount</button>

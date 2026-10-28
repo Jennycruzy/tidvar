@@ -151,6 +151,21 @@ if (landing) {
     .then((runs: unknown[]) => {const node = element("l-stat-tabs");node.dataset.count = String(runs.length);node.textContent = String(runs.length);if (node.closest(".in")) countUp(node);})
     .catch(() => {element("l-stat-tabs").textContent = "✓";});
 }
+// Testnet only: the operator's testnet address receives the change, and the faucet funds the tab.
+element<HTMLButtonElement>("use-demo-address").onclick=()=>{
+  element<HTMLInputElement>("return-address").value="utest1adklqke407r2ech4yv6v6zz7levrny00n0929npkrfmddfxe4lshpashur8ha2qqjp6mqsgudh0j0g0yjq9wj80fmuafw3vdk5nzmlvfrvgfqe7wnf26gsc984f2w79zz7c5kelm0756gwy2gcfxf3gqttt40eqgd88h2lrr206j95fn0p2emm096tp7gmr06f6enuwqffu7z4h5jjk";
+};
+element<HTMLButtonElement>("faucet").onclick=async()=>{
+  const button=element<HTMLButtonElement>("faucet");const address=element("address").textContent?.trim()??"";
+  if(!address)return;
+  button.disabled=true;button.textContent="Sending free testnet coins…";error.textContent="";
+  try{
+    const response=await fetch("/faucet",{method:"POST",credentials:"omit",headers:{"content-type":"application/json"},body:JSON.stringify({address})});
+    const reply=await response.json() as {status?:string;error?:string};
+    if(!response.ok)throw new Error(reply.error??"The free testnet coins could not be sent. Use a testnet faucet instead.");
+    button.textContent="Sent: arrives after one block (about a minute)";
+  }catch(failure){error.textContent=failure instanceof Error?failure.message:"The free testnet coins could not be sent.";button.disabled=false;button.textContent="Fund it free (testnet coins)";}
+};
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
   protect.disabled = true;error.textContent = "";progress.textContent = "Protecting this tab on your device.";
@@ -560,7 +575,11 @@ element<HTMLButtonElement>("download-timings").onclick=()=>{
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 void fetch("/v1/offer",{credentials:"omit",cache:"no-store"}).then(r=>r.json()).then((offer:{network:string})=>{
-  if(offer.network!=="Mainnet")return;
+  if(offer.network!=="Mainnet"){
+    // Testnet: a judge can try everything without a wallet.
+    element("use-demo-address").hidden=false;element("faucet").hidden=false;
+    return;
+  }
   unit="ZEC";
   document.body.dataset.net="mainnet";
   document.querySelectorAll(".unit").forEach(node=>{node.textContent="ZEC";});
