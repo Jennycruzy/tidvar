@@ -60,8 +60,35 @@ signed reply in one database transaction, then runs the route and returns the re
 of the same request is answered from the saved reply and never charged twice. A request that never reached the
 route is settled at `POST /v1/tabs/{id}/settle` as not charged.
 
-In the browser: `await tab.fetchPaid(url, progress)` pays the price (plus a little VPN time while it waits) and
-returns the body.
+In the browser: `await tab.fetchPaid(url, progress, {method, body, headers}, maxPrice)` pays the price (plus a
+little VPN time while it waits) and returns the body; it refuses a route that asks more than `maxPrice`.
+
+`Paywall::with_routes(store, offer, vec![("/api/search".into(), 3_000), ("/api/*".into(), 500)])` prices
+paths instead of a whole router: the first match wins, a trailing `*` is a prefix, and other paths pass free.
+
+**x402 v2.** Every 402 also carries a `PAYMENT-REQUIRED` header (base64 JSON, `x402Version: 2`) whose
+`accepts` entry has scheme `tidvar-tab`, network `zcash:mainnet` or `zcash:testnet`, the price in zatoshi
+as `amount`, asset `ZEC`, `payTo` (the service's address) and the offer in `extra`. A client may pay with
+`PAYMENT-SIGNATURE` (base64 `{x402Version: 2, accepted, payload: {request}}`, where `request` is the signed
+charge) and gets `PAYMENT-RESPONSE` (`success`, `network`, `amount`, `payer` = the tab, and the signed reply
+in `extensions.tidvar.reply`). `transaction` is empty: the payment is off-chain until the tab closes. The kit
+pays over x402 whenever a route offers `tidvar-tab`.
+
+## Proxy: any existing API, no code change
+
+`tidvar-kit-demo` with `TIDVAR_UPSTREAM` puts an existing HTTP API behind tab payments:
+
+```sh
+TIDVAR_UPSTREAM=http://127.0.0.1:3000 \
+TIDVAR_ROUTES='/api/search=3000,/api/*=500' \
+TIDVAR_OFFER_JSON="$(curl -s https://mainnet.tidvar.38-49-216-59.sslip.io/v1/offer)" \
+TIDVAR_DATA_DIR=/root/tidvar-data-main TIDVAR_KIT_LISTEN=127.0.0.1:27468 tidvar-kit-demo
+```
+
+Priced paths answer 402 until paid; other paths pass through. Payment headers are removed before forwarding,
+and `TIDVAR_STRIP=/llm` drops a public path prefix. The price is charged before the request is forwarded, so
+an upstream error is still a paid request. Deployed: an unmodified llama.cpp server (the OpenAI chat
+completions API) at `/llm/v1/chat/completions`, 1,000 zat a call, on both services.
 
 ## Agents: tidvar-agent
 
@@ -73,10 +100,17 @@ tab key and encrypted backup live in `~/.tidvar-agent` (mode 600).
 tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
 tidvar-agent ask "What is a payment channel?"      # 1,000 zat from the tab
 tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/paid/fact
+tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
+  --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close                                  # the rest returns to your address
 ```
 
-As an MCP stdio server (`tidvar-agent mcp`), it offers `tab_status`, `ask`, `fetch_paid` and `close_tab`:
+`TIDVAR_MAX_PRICE` (default 5,000 zat) caps one request; the tab's size caps everything. The person who
+starts the agent sets both, so nothing a model reads can raise them.
+
+As an MCP stdio server (`tidvar-agent mcp`), it offers `tab_status`, `ask`, `fetch_paid` (any method and
+body) and `close_tab`. In Claude Code: `claude mcp add tidvar -- node packages/tidvar-agent/agent.mjs mcp`.
+Any MCP client:
 
 ```json
 {"mcpServers": {"tidvar": {"command": "node", "args": ["packages/tidvar-agent/agent.mjs", "mcp"]}}}

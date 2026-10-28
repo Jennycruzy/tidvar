@@ -1,6 +1,6 @@
 [package]
 name = "tidvar-kit-demo"
-description = "A second service charging 2,000 zat per request with tidvar-402"
+description = "tidvar-402 example and proxy: charge per request in shielded Zcash from a Tidvar tab"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,6 +12,7 @@ tidvar-402 = {path="../../crates/tidvar-402"}
 axum = {version="0.8",features=["json","tokio","http1"]}
 tokio.workspace = true
 anyhow = "1"
+reqwest = {version="0.12",default-features=false}
 
 [lints]
 workspace = true

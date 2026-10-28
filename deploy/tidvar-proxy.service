@@ -1,0 +1,20 @@
+[Unit]
+Description=Tidvar proxy: an unmodified OpenAI-compatible model API (llama.cpp) behind tab payments (tidvar-402)
+After=tidvar-api.service tidvar-chat-model.service
+Requires=tidvar-api.service
+
+[Service]
+Type=simple
+Environment=TIDVAR_DATA_DIR=/root/tidvar-data TIDVAR_KIT_LISTEN=127.0.0.1:27466 TIDVAR_UPSTREAM=http://127.0.0.1:27463 TIDVAR_STRIP=/llm
+Environment="TIDVAR_ROUTES=/llm/v1/chat/completions=1000,/llm/*=1000"
+ExecStart=/bin/sh -c "TIDVAR_OFFER_JSON=$(curl -sf http://127.0.0.1:27461/v1/offer) exec /root/tidvar/target/release/tidvar-kit-demo"
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/tidvar-data
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

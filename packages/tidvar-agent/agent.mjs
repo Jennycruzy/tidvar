@@ -107,20 +107,28 @@ async function status(tab) {
 }
 function option(args, name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; }
 
+// The most one request may cost (zat), set by the person who starts the agent, not by the model.
+const MAX_PRICE = Number(process.env.TIDVAR_MAX_PRICE ?? 5000);
+async function paidCall(tab, url, method, body, contentType) {
+  const init = {method: method ? String(method).toUpperCase() : (body ? "POST" : "GET")};
+  if (body !== undefined) { init.body = String(body); init.headers = {"content-type": contentType ? String(contentType) : "application/json"}; }
+  return await tab.fetchPaid(url, chain, init, MAX_PRICE);
+}
+
 // ---- MCP stdio server
 async function mcp() {
   let tab;
   const tools = [
     {name: "tab_status", description: "How much of the agent's Tidvar tab is paid, used and left. The tab size is the hard spending limit.", inputSchema: {type: "object", properties: {}}},
     {name: "ask", description: "Ask Tidvar Chat (a private model on the service's server). Costs 1,000 zat from the tab.", inputSchema: {type: "object", properties: {question: {type: "string"}}, required: ["question"]}},
-    {name: "fetch_paid", description: "Fetch a URL protected by tidvar-402, paying its price from the tab; refuses beyond the tab.", inputSchema: {type: "object", properties: {url: {type: "string"}}, required: ["url"]}},
+    {name: "fetch_paid", description: "Call a URL protected by tidvar-402 (any HTTP API behind it, e.g. an OpenAI-compatible model), paying its price from the tab. Refuses a price above the per-request limit and anything beyond the tab.", inputSchema: {type: "object", properties: {url: {type: "string"}, method: {type: "string", description: "GET (default) or POST"}, body: {type: "string", description: "Request body, for example JSON"}, content_type: {type: "string", description: "Defaults to application/json when a body is given"}}, required: ["url"]}},
     {name: "close_tab", description: "Close the tab: pays the service what was used and returns the rest to the owner's address.", inputSchema: {type: "object", properties: {}}},
   ];
   const run = async (name, input) => {
     tab ??= await currentTab();
     if (name === "tab_status") return await status(tab);
     if (name === "ask") return await tab.chat(String(input.question ?? ""), chain);
-    if (name === "fetch_paid") return await tab.fetchPaid(String(input.url ?? ""), chain);
+    if (name === "fetch_paid") return await paidCall(tab, String(input.url ?? ""), input.method, input.body, input.content_type);
     if (name === "close_tab") return await tab.close(chain);
     throw new Error("Unknown tool.");
   };
@@ -153,8 +161,8 @@ try {
   if (command === "open") await openTab(args);
   else if (command === "status") print(await status(await currentTab()));
   else if (command === "ask") print(await (await currentTab()).chat(args.join(" "), chain));
-  else if (command === "fetch") print(await (await currentTab()).fetchPaid(args[0], chain));
+  else if (command === "fetch") print(await paidCall(await currentTab(), args[0], option(args, "--method"), option(args, "--data")));
   else if (command === "close") print(await (await currentTab()).close(chain));
   else if (command === "mcp") await mcp();
-  else { console.error("usage: tidvar-agent open --service <https://…> --amount 0.0005 --return <address> | status | ask <question> | fetch <url> | close | mcp"); process.exitCode = 2; }
+  else { console.error("usage: tidvar-agent open --service <https://…> --amount 0.0005 --return <address> | status | ask <question> | fetch <url> [--data <body>] [--method POST] | close | mcp"); process.exitCode = 2; }
 } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }

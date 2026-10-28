@@ -63,7 +63,8 @@ the service exactly 29,000 zat and returned 11,000 (`evidence/testnet/runs/14-ag
 3. Paste a fresh receive address from your wallet for the change, write down the 24 words, then pay the QR
    code from any Zcash wallet with Ironwood (Zodl, Zingo).
 4. After one block: turn on the VPN (WireGuard config or QR), ask Tidvar Chat, top up, renew, or close.
-   The meter shows every payment and "on chain: N transactions".
+   The meter shows every payment and "on chain: N transactions". Choose how long the VPN stays paid when you
+   leave the page (1, 8 or 24 hours) and lock your phone: it keeps running.
 
 ## Check it yourself in 60 seconds
 
@@ -136,7 +137,7 @@ expiry gap is 40 blocks, the one a cooperative close uses.
 | Payments below the network fee, instant | The browser syncs through our relay, so the public Zcash server never sees your IP; we do, as any VPN does | Anonymity from the service at the IP level (a VPN service always sees your IP) |
 | 2-of-2 lock; refund after the time seal | One tab's payments are linked to that tab: open a new tab per session to split them | Protection if drand's threshold colludes to publish early |
 | Prompts are answered on our server and never stored | A forced or watchtower close carries a far expiry, so it can stand out; cooperative closes do not | Two-way tabs or routing between services |
-| | If you vanish without closing, the service keeps what you prepaid: at most 60 minutes of VPN (600 zat) | Outside user numbers (we report only our own runs) |
+| | If you vanish without closing, the service keeps what you prepaid: the 1, 8 or 24 hours of VPN you chose to keep paid while away (600 to 14,400 zat) | Outside user numbers (we report only our own runs) |
 
 ## Developer kit
 
@@ -150,14 +151,26 @@ let app = Router::new()
 ```
 
 In the browser, `await tab.fetchPaid(url, progress)` pays and returns the body. A retried request is never
-charged twice: the charge and the signed reply are one database transaction.
+charged twice: the charge and the signed reply are one database transaction. Every 402 also speaks
+**x402 v2** (`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`, scheme `tidvar-tab`).
+
+**Any existing API, no code change.** Proxy mode puts an HTTP API behind tab payments by pointing at it:
+
+```sh
+TIDVAR_UPSTREAM=http://127.0.0.1:3000 TIDVAR_ROUTES='/api/search=3000,/api/*=500' tidvar-kit-demo
+```
+
+Live on both services: an unmodified llama.cpp server's OpenAI chat API at
+`/llm/v1/chat/completions`, 1,000 zat a call.
 
 An agent with a hard spending limit, also as an MCP server (`tidvar-agent mcp`):
 
 ```sh
 tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
-tidvar-agent ask "What is a payment channel?"
+tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
+  --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close
+claude mcp add tidvar -- node packages/tidvar-agent/agent.mjs mcp   # the same tab as a tool in Claude Code
 ```
 
 ## Attacks tried

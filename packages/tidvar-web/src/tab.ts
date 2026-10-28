@@ -181,27 +181,41 @@ export class Tab {
     return {answer,balance:this.balance};
   }
   /** Fetches a route protected by tidvar-402: pays its price from this tab, then returns the response. */
-  async fetchPaid(url: string, progress: (height:bigint,value:bigint)=>void): Promise<{body: string; balance: Balance | undefined}> {
-    const first=await fetch(url,{credentials:"omit",cache:"no-store",redirect:"error"});
-    if(first.status!==402)return {body:await first.text(),balance:this.balance};
+  /** Calls a tidvar-402 route (any method), paying its price from the tab, never more than `maxPrice`. */
+  async fetchPaid(url: string, progress: (height:bigint,value:bigint)=>void, init: {method?: string; body?: string; headers?: Record<string,string>} = {}, maxPrice = 100000): Promise<{body: string; status: number; price: number; protocol?: string; balance: Balance | undefined}> {
+    const base={credentials:"omit" as const,cache:"no-store" as const,redirect:"error" as const,method:init.method ?? "GET",body:init.body};
+    const first=await fetch(url,{...base,headers:init.headers ?? {}});
+    if(first.status!==402)return {body:await first.text(),status:first.status,price:0,balance:this.balance};
     const price=Number(first.headers.get("tidvar-price"));
-    if(!Number.isSafeInteger(price) || price<=0 || price>100000)throw new Error("This route asks for a price the tab will not pay.");
+    if(!Number.isSafeInteger(price) || price<=0 || price>Math.min(maxPrice,100000))throw new Error("This route asks "+first.headers.get("tidvar-price")+" zat, above the "+Math.min(maxPrice,100000)+" zat limit for one request.");
     await this.deliver();
     await this.pay(false,progress,price+CHAT_VPN_MARGIN);
     const payer=this.opening.session.current();
     const route=new URL(url,location.href).pathname;
     const signed=JSON.parse(payer.prepare_request(JSON.stringify({step:"charge",price,route}))) as unknown;
     await this.opening.session.save(this.id);
+    // Pays over x402 v2 (PAYMENT-SIGNATURE / PAYMENT-RESPONSE) when the route offers the tidvar-tab
+    // scheme there, otherwise with the Tidvar-Request header.
+    const required=first.headers.get("payment-required");
+    const offered=required?(JSON.parse(atob(required)) as {accepts?:{scheme?:string}[]}).accepts?.find(a=>a.scheme==="tidvar-tab"):undefined;
     const header=btoa(JSON.stringify(signed)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-    const paid=await fetch(url,{credentials:"omit",cache:"no-store",redirect:"error",headers:{"tidvar-request":header}});
-    const reply=paid.headers.get("tidvar-reply");
+    const payment:Record<string,string>=offered
+      ? {"payment-signature":btoa(JSON.stringify({x402Version:2,accepted:offered,payload:{request:signed}}))}
+      : {"tidvar-request":header};
+    const paid=await fetch(url,{...base,headers:{...(init.headers ?? {}),...payment}});
+    const settled=paid.headers.get("payment-response");
+    const reply=offered && settled
+      ? (JSON.parse(atob(settled)) as {extensions?:{tidvar?:{reply?:string}}}).extensions?.tidvar?.reply ?? null
+      : paid.headers.get("tidvar-reply");
     if(!paid.ok || !reply)throw new Error((await paid.text()) || "The route was not paid.");
     const decoded=atob(reply.replace(/-/g,"+").replace(/_/g,"/"));
     const accepted=JSON.parse(payer.accept_reply(decoded,BigInt(Date.now()))) as {balance?: Balance};
     if(accepted.balance)this.balance=accepted.balance;
     await this.opening.session.save(this.id);
-    return {body:await paid.text(),balance:this.balance};
+    return {body:await paid.text(),status:paid.status,price,protocol:offered?"x402":"tidvar",balance:this.balance};
   }
+  /** How long a payment made while the page is hidden keeps the VPN paid: 1 hour unless set (at most 24). */
+  awayMs = 3_600_000;
   async pay(hidden: boolean, progress: (height:bigint,value:bigint)=>void, extra = 0): Promise<PaymentEvent | undefined> {
     await this.deliver();
     const payer=this.opening.session.current();
@@ -211,7 +225,7 @@ export class Tab {
     if(!hidden)await this.nonces();
     const used=this.balance?.used ?? 0;
     if(!Number.isSafeInteger(used) || used<0)throw new Error("The service returned an invalid usage amount.");
-    let amount=payer.payment_target(BigInt(Date.now()),hidden,BigInt(used));
+    let amount=hidden?payer.payment_target_ahead(BigInt(Date.now()),BigInt(this.awayMs),BigInt(used)):payer.payment_target(BigInt(Date.now()),false,BigInt(used));
     if(extra>0 && BigInt(used+extra)>amount)amount=BigInt(used+extra);
     if(amount<=payer.signed_amount())return;
     const count=payer.funding_note_count();
