@@ -76,6 +76,27 @@ fn device(name: &InterfaceName) -> Result<Device> {
     }
     Ok(device)
 }
+/// Cuts or restores a connected peer's internet without removing its tunnel, so the paying page
+/// can still reach this service through it (to resume, pay or close) while WireGuard stays on.
+fn block(address: std::net::Ipv4Addr, blocked: bool) -> Result<()> {
+    let table = format!("{}_vpn", interface());
+    let element = format!("{{ {address} }}");
+    let status = Command::new("/usr/sbin/nft")
+        .args([
+            if blocked { "add" } else { "delete" },
+            "element",
+            "inet",
+            &table,
+            "blocked",
+            &element,
+        ])
+        .status()
+        .context("The VPN firewall could not be changed.")?;
+    if !status.success() {
+        bail!("The VPN firewall rejected a change.");
+    }
+    Ok(())
+}
 fn remove(name: &InterfaceName, key: [u8; 32]) -> Result<()> {
     DeviceUpdate::new()
         .remove_peer_by_key(&Key(key))
@@ -162,6 +183,8 @@ fn run() -> Result<()> {
     let mut shaped = HashSet::new();
     // Tabs that are closing with no peer installed need no more work until a restart.
     let mut finished: HashSet<[u8; 32]> = HashSet::new();
+    // Connected peers whose internet is cut (paused or unpaid) but whose tunnel stays up.
+    let mut blocked: HashSet<[u8; 32]> = HashSet::new();
     loop {
         let cycle = Instant::now();
         let registered = store.peers()?;
@@ -179,6 +202,7 @@ fn run() -> Result<()> {
             remove(&name, key)?;
             current.remove(&key);
         }
+        blocked.retain(|key| current.contains(key));
         let mut admitted = false;
         for peer in registered {
             if finished.contains(&peer.tab_id) && !current.contains(&peer.public_key) {
@@ -244,10 +268,35 @@ fn run() -> Result<()> {
                     now()?,
                     started.elapsed().as_micros()
                 );
-            } else if !allowed && current.contains(&peer.public_key) {
+            } else if allowed && blocked.contains(&peer.public_key) {
                 let started = Instant::now();
+                block(peer.address()?, false)?;
+                blocked.remove(&peer.public_key);
+                store.resume_vpn(&peer.tab_id, now()?)?;
+                eprintln!(
+                    "VPN connected at {} in {}us.",
+                    now()?,
+                    started.elapsed().as_micros()
+                );
+            } else if !allowed && balance.closing && current.contains(&peer.public_key) {
+                let started = Instant::now();
+                if blocked.remove(&peer.public_key) {
+                    block(peer.address()?, false)?;
+                }
                 remove(&name, peer.public_key)?;
                 current.remove(&peer.public_key);
+                eprintln!(
+                    "VPN disconnected at {} in {}us.",
+                    now()?,
+                    started.elapsed().as_micros()
+                );
+            } else if !allowed
+                && current.contains(&peer.public_key)
+                && !blocked.contains(&peer.public_key)
+            {
+                let started = Instant::now();
+                block(peer.address()?, true)?;
+                blocked.insert(peer.public_key);
                 eprintln!(
                     "VPN disconnected at {} in {}us.",
                     now()?,
