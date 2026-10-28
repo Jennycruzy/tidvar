@@ -90,7 +90,9 @@ copyWords("renew-phrase", "copy-renew-phrase");
   const away=element<HTMLSelectElement>("away");
   try{const saved=localStorage.getItem("tidvar-away-ms");if(saved && [...away.options].some(o=>o.value===saved))away.value=saved;}catch{/* storage unavailable */}
   void call("away",Number(away.value)).catch(()=>undefined);
-  away.onchange=()=>{try{localStorage.setItem("tidvar-away-ms",away.value);}catch{/* storage unavailable */}void call("away",Number(away.value)).catch(()=>undefined);};
+  // Prepays the chosen period now, while the page is on screen: a phone may freeze a hidden page
+  // before its payment goes out.
+  away.onchange=()=>{try{localStorage.setItem("tidvar-away-ms",away.value);}catch{/* storage unavailable */}void call("away",Number(away.value)).then(()=>{if(!element("vpn").hidden)return payOnce(true);}).catch(()=>undefined);};
 }
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
@@ -271,6 +273,7 @@ element<HTMLButtonElement>("vpn-setup").onclick = async () => {
     element<HTMLAnchorElement>("vpn-download").href = configUrl;
     element<HTMLAnchorElement>("vpn-download").download = "tidvar-"+id.slice(0,6)+".conf";
     element("vpn-config").hidden = false;
+    void call("away",Number(element<HTMLSelectElement>("away").value)).then(()=>payOnce(true)).catch(()=>undefined);
     showMeter(result.meter);
   } catch (failure) {error.textContent = failure instanceof Error ? failure.message : "The VPN could not be set up.";}
   finally {button.disabled = false;}
