@@ -591,6 +591,15 @@ element<HTMLButtonElement>("prepare-cutoff").onclick=async()=>{
     error.textContent=failure instanceof Error?failure.message:"The cutoff check could not start.";
   }finally{button.disabled=false;}
 };
+// Leaves an unpaid tab behind (it holds nothing) and opens the setup screen again.
+element<HTMLButtonElement>("start-over").onclick=()=>{
+  if(!element("vpn").hidden||(element("chain-status").textContent??"").startsWith("Payment confirmed")){
+    error.textContent="This tab already has money in it. Use it, then close it to get the rest back.";return;
+  }
+  if(!window.confirm("Start over? Only do this if you have NOT paid into this tab. Anything paid to it later comes back through its refund."))return;
+  localStorage.removeItem("tidvar-current-tab");
+  location.assign("/open");
+};
 element<HTMLButtonElement>("new-tab").onclick=()=>{
   if(!closeMined)return;
   localStorage.removeItem("tidvar-current-tab");

@@ -116,6 +116,7 @@ button:disabled{opacity:.55;cursor:progress;transform:none}
 .fund-fields .actions{margin-top:18px}
 .backup-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
 .backup-row .hint{margin:0}
+#start-over{display:flex;margin:14px auto 0;font-size:.88rem}
 
 /* Live meter */
 .meter-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
