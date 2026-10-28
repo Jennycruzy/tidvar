@@ -4,6 +4,8 @@ define vpn = "tidvar"
 table inet tidvar_vpn {
     chain input {
         type filter hook input priority -10; policy accept;
+        # The page that pays for the tunnel is served from this host: reach it through the tunnel.
+        iifname $vpn ip daddr 38.49.216.59 tcp dport { 80, 443 } accept
         iifname $vpn ip daddr 10.77.0.1 udp dport 53 accept
         iifname $vpn ip daddr 10.77.0.1 tcp dport 53 accept
         iifname $vpn ip protocol icmp accept
