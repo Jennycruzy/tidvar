@@ -94,6 +94,34 @@ copyWords("renew-phrase", "copy-renew-phrase");
   // before its payment goes out.
   away.onchange=()=>{try{localStorage.setItem("tidvar-away-ms",away.value);}catch{/* storage unavailable */}void call("away",Number(away.value)).then(()=>{if(!element("vpn").hidden)return payOnce(true);}).catch(()=>undefined);};
 }
+// The landing page at "/": product first, the app stays at /open.
+const landing = location.pathname === "/";
+if (landing) {
+  document.body.dataset.page = "landing";
+  document.title = "Tidvar — Pay-per-use on Zcash, nobody holds your money";
+  element("landing").hidden = false;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const show = (node: Element) => node.classList.add("in");
+  if (reduced || !("IntersectionObserver" in window)) document.querySelectorAll(".reveal,.l-bars").forEach(show);
+  else {
+    const seen = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {show(entry.target);seen.unobserve(entry.target);}
+    }, {threshold: 0.15});
+    document.querySelectorAll(".reveal,.l-bars").forEach(node => seen.observe(node));
+  }
+  // An illustrative tab: one off-chain payment every 600 ms, and still one transaction on chain.
+  let payments = 0;
+  const tick = () => {
+    payments += 1;
+    element("l-pay-count").textContent = payments.toLocaleString();
+    element("l-zat").textContent = (payments * 1).toLocaleString();
+  };
+  if (!reduced) window.setInterval(tick, 600); else {payments = 412;tick();}
+  void fetch("/v1/evidence", {credentials: "omit", cache: "no-store"})
+    .then(response => response.json())
+    .then((runs: unknown[]) => {element("l-stat-tabs").textContent = String(runs.length);})
+    .catch(() => {element("l-stat-tabs").textContent = "✓";});
+}
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
   protect.disabled = true;error.textContent = "";progress.textContent = "Protecting this tab on your device.";
@@ -154,7 +182,7 @@ for (const [id, field] of [["copy-address", "address"], ["copy-amount", "amount"
   };
 }
 const stored = localStorage.getItem("tidvar-current-tab");
-if (stored) {
+if (stored && !landing) {
   protect.disabled = true;
   progress.textContent = "Recovering your saved tab.";
   void call("recover", stored).then(async value => {

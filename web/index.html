@@ -10,8 +10,9 @@
 <body>
 <header class="bar">
   <div class="bar-inner">
-    <a class="brand" href="/open" aria-label="Tidvar home"><span class="mark" aria-hidden="true"></span>tidvar</a>
+    <a class="brand" href="/" aria-label="Tidvar home"><span class="mark" aria-hidden="true"></span>tidvar</a>
     <nav class="bar-links" aria-label="Main">
+      <a href="/open">Open a tab</a>
       <a href="/check">Check it yourself</a>
       <a href="https://github.com/Jennycruzy/tidvar">Code</a>
       <span class="network"><span class="dot" aria-hidden="true"></span><span class="net">TESTNET</span> · <span class="unit">TAZ</span> only</span>
@@ -19,6 +20,118 @@
   </div>
 </header>
 <main>
+<section id="landing" hidden>
+  <div class="l-hero">
+    <div class="l-hero-copy">
+      <p class="eyebrow reveal">Pay-per-use on Zcash · shielded · off-chain</p>
+      <h1 class="reveal">Pay for exactly what you use.<br><span class="soft">Nobody holds your money.</span></h1>
+      <p class="lede reveal">Open a tab with one private payment. Your browser, your agent or your app then pays by the second or by the request, off-chain and instantly, in amounts smaller than Zcash's own fee. When you're done, one transaction pays the service and sends the rest back to you.</p>
+      <div class="l-cta reveal">
+        <a class="button primary" href="/open">Open a tab</a>
+        <a class="button secondary" href="#developers">Charge for your API</a>
+      </div>
+      <p class="hint reveal" id="l-proof-line">Live on Zcash mainnet. Every recorded transaction can be <a href="/check">checked from this page</a>.</p>
+    </div>
+    <div class="l-meter reveal" aria-label="An example tab paying as it goes">
+      <div class="l-meter-head"><span class="dot live-dot" aria-hidden="true"></span><span>Example tab · streaming</span><span class="l-net net">TESTNET</span></div>
+      <div class="l-meter-num"><span id="l-pay-count">0</span><small>payments</small></div>
+      <div class="l-stream" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <dl class="l-meter-rows">
+        <div><dt>Paid so far</dt><dd><span id="l-zat">0</span> zat</dd></div>
+        <div><dt>Network fees</dt><dd>0 zat</dd></div>
+        <div><dt>On chain</dt><dd class="l-chain">1 transaction</dd></div>
+      </dl>
+      <p class="l-meter-foot">1 zat every 6 seconds of VPN · 1,000 zat per answer · any price per API call</p>
+    </div>
+  </div>
+
+  <section class="l-section">
+    <p class="eyebrow reveal">How a tab works</p>
+    <h2 class="l-h2 reveal">Two transactions, any number of payments.</h2>
+    <div class="l-flow reveal" aria-hidden="true">
+      <div class="l-node"><b>Your wallet</b><span>one shielded payment</span></div>
+      <div class="l-pipe"><span></span></div>
+      <div class="l-node l-lock"><b>The tab</b><span>a lock that needs both keys</span></div>
+      <div class="l-pipe l-pipe-fast"><span></span><span></span><span></span></div>
+      <div class="l-node"><b>The service</b><span>paid every 10 s, off-chain</span></div>
+    </div>
+    <ol class="steps l-steps">
+      <li class="reveal"><span class="step-n">1</span><strong>Open</strong><span>Your device and the service make a joint key neither can spend alone. The service also seals its half to a future time, your refund time, and your device checks that seal before you pay.</span></li>
+      <li class="reveal"><span class="step-n">2</span><strong>Use</strong><span>Every payment is a signed running total: a note that lets the service take this much. It costs milliseconds and nothing goes on chain.</span></li>
+      <li class="reveal"><span class="step-n">3</span><strong>Close</strong><span>One transaction pays the service what you used and returns the rest. If the service vanishes, the seal opens at the refund time and you take everything back alone.</span></li>
+    </ol>
+  </section>
+
+  <section class="l-section">
+    <p class="eyebrow reveal">Live today</p>
+    <h2 class="l-h2 reveal">One tab, anything metered.</h2>
+    <div class="l-cards">
+      <article class="l-card reveal">
+        <div class="l-icon l-icon-vpn" aria-hidden="true"></div>
+        <h3>A VPN, paid by the second</h3>
+        <p>The standard WireGuard app on any phone or laptop. Keep it paid 1, 8 or 24 hours ahead and lock your phone; pause it, resume it, close it. No account, no card.</p>
+        <a href="/open">Try it on mainnet →</a>
+      </article>
+      <article class="l-card reveal">
+        <div class="l-icon l-icon-api" aria-hidden="true"></div>
+        <h3>Any API, paid per request</h3>
+        <p>Point the proxy at an existing HTTP API and give paths a price. Unpaid calls get <code>402 Payment Required</code> in the x402 v2 format. Live: an unmodified OpenAI-compatible model API.</p>
+        <a href="#developers">See the 3 lines →</a>
+      </article>
+      <article class="l-card reveal">
+        <div class="l-icon l-icon-agent" aria-hidden="true"></div>
+        <h3>AI agents with a hard budget</h3>
+        <p>An agent funds its own tab once and pays APIs as it works, from the command line or as an MCP tool. The tab's size and a per-request cap are limits no prompt can raise.</p>
+        <a href="https://github.com/Jennycruzy/tidvar/blob/main/docs/kit.md">Agent guide →</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="l-section l-fees">
+    <div class="reveal">
+      <p class="eyebrow">Why a tab</p>
+      <h2 class="l-h2">A minute of VPN is worth 10 zat. One Zcash payment costs 10,000 zat in fees.</h2>
+      <p class="lede">Paying per minute or per call with ordinary transactions costs more in fees than the thing itself. A tab pays the fee twice, once to open and once to close, however many payments happen in between.</p>
+    </div>
+    <div class="l-bars reveal" aria-label="Fees for 400 payments">
+      <div class="l-bar"><span>400 ordinary payments</span><div class="l-bar-track"><i class="l-bar-fill l-bar-big"></i></div><b>4,000,000 zat in fees</b></div>
+      <div class="l-bar"><span>One Tidvar tab, 400 payments</span><div class="l-bar-track"><i class="l-bar-fill l-bar-small"></i></div><b>20,000 zat in fees</b></div>
+    </div>
+  </section>
+
+  <section class="l-section">
+    <p class="eyebrow reveal">Why you can trust it</p>
+    <h2 class="l-h2 reveal">Checked, attacked, and on chain.</h2>
+    <div class="l-stats">
+      <div class="l-stat reveal"><b id="l-stat-tabs">–</b><span>recorded tabs on this network, every transaction re-checkable at <a href="/check">/check</a></span></div>
+      <div class="l-stat reveal"><b>486M</b><span>malformed messages fuzzed across 8 decoders, 0 crashes</span></div>
+      <div class="l-stat reveal"><b>2<sup>−60</sup></b><span>chance a service passes the sealed-key check while cheating</span></div>
+      <div class="l-stat reveal"><b>0</b><span>accounts, cards or custodians: unused value always comes back to you</span></div>
+    </div>
+  </section>
+
+  <section class="l-section" id="developers">
+    <p class="eyebrow reveal">For developers</p>
+    <h2 class="l-h2 reveal">Put a price on an API you already run.</h2>
+    <div class="l-code reveal">
+      <div class="l-code-tabs"><span class="on">proxy</span><span>agent</span></div>
+<pre><code><span class="c"># any existing HTTP API, no code change</span>
+TIDVAR_UPSTREAM=http://127.0.0.1:3000 \
+TIDVAR_ROUTES='/api/search=3000,/api/*=500' \
+tidvar-kit-demo
+
+<span class="c"># an agent pays it from its own tab</span>
+tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return &lt;your address&gt;
+tidvar-agent fetch https://…/api/search --data '{"q":"zcash"}'
+tidvar-agent close   <span class="c"># the rest returns to you</span></code></pre>
+    </div>
+    <div class="l-cta reveal">
+      <a class="button primary" href="https://github.com/Jennycruzy/tidvar">Read the code</a>
+      <a class="button secondary" href="https://github.com/Jennycruzy/tidvar/blob/main/docs/protocol.md">The protocol</a>
+    </div>
+  </section>
+</section>
+
 <section id="intro" class="hero">
   <p class="eyebrow">Private Zcash · off-chain · by the second</p>
   <h1>Pay by the second.<br><span class="soft">Keep the rest.</span></h1>
