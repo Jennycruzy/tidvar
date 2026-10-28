@@ -535,7 +535,9 @@ if(location.pathname==="/check"){
     finally{button.disabled=false;}
   };
 }
-if(location.pathname==="/judge"){
+// No judge codes were issued; free testnet funding gives the same no-wallet path.
+if(location.pathname==="/judge")location.replace("/open");
+if(location.pathname==="/judge-codes"){
   element("judge").hidden=false;document.getElementById("setup")?.setAttribute("hidden","");
   element<HTMLButtonElement>("judge-submit").onclick=async()=>{
     const button=element<HTMLButtonElement>("judge-submit");button.disabled=true;error.textContent="";
