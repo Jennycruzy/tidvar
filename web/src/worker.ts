@@ -17,10 +17,11 @@ function meter(): unknown {
   return {local, service: current().serviceBalance() ?? null, signed: Number(opening.session.current().signed_amount()), received};
 }
 const host = globalThis as unknown as {onmessage: ((event: MessageEvent) => void) | null; postMessage(message: unknown): void};
-let busy = false;
-host.onmessage = async event => {
-  if (busy) {host.postMessage({id: event.data.id, error: "This step is still running. Keep the page open."}); return;}
-  busy = true;
+// Steps run one at a time in the order they arrive: a button pressed while a payment is being
+// signed waits for it instead of being refused.
+let queue: Promise<void> = Promise.resolve();
+host.onmessage = event => {queue = queue.then(() => handle(event)).catch(() => undefined);};
+async function handle(event: MessageEvent): Promise<void> {
   try {
     const {id, type, value} = event.data as {id: number; type: string; value: unknown};
     let result: unknown;
@@ -96,5 +97,5 @@ host.onmessage = async event => {
     let snapshot: unknown;
     try {if(tab)snapshot=meter();} catch {}
     host.postMessage({id:event.data.id,meter:snapshot,error:error instanceof Error ? error.message : typeof error === "string" ? error : "This step could not finish. Keep your backup and retry."});
-  } finally {busy = false;}
-};
+  }
+}
