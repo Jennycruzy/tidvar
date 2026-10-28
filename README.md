@@ -2,7 +2,9 @@
 
 <h1 align="center">Tidvar</h1>
 
-<p align="center"><b>Pay for exactly what you use, in private Zcash. Nobody holds your money.</b></p>
+<p align="center"><b>Off-chain payments on Zcash. Pay for exactly what you use. Nobody holds your money.</b></p>
+
+<p align="center">A shielded payment channel, live on mainnet: hundreds of payments off-chain, two transactions on chain.</p>
 
 <p align="center">
 <a href="https://tidvar.site">Mainnet app</a> ·
@@ -41,6 +43,7 @@ than the thing being bought, and a prepaid account means the service holds your 
 |---|---|---|
 | Fees for 400 payments | 4,000,000 zat | 20,000 zat (one open, one close) |
 | Smallest payment | the 10,000 zat fee alone | 1 zat (6 seconds of VPN) |
+| Where payments happen | on chain, one transaction each | off-chain, between your device and the service; only the open and the close go on chain |
 | Speed | about 75 s per block | instant: signed on your device, checked by the service |
 | Who holds the money | you, or the service if prepaid | a lock that needs both keys; unused value returns to you |
 | What the chain sees | every payment | two shielded transactions, shaped like 86.5% of mainnet Ironwood traffic |
