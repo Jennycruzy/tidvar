@@ -42,6 +42,8 @@ export interface Wasm {
   round_for_terms(terms: string): bigint;
   latest_request(): Uint8Array;
   info_request(): Uint8Array;
+  transaction_request(txid: string): Uint8Array;
+  transaction_check(reply: Uint8Array): string;
   observe_info(reply: Uint8Array): string;
   latest_height(reply: Uint8Array): bigint;
   tree_request(height: bigint): Uint8Array;

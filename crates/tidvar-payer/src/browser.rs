@@ -267,6 +267,32 @@ pub fn latest_request() -> Result<Vec<u8>, JsValue> {
     tidvar_chain::transport::request(&tidvar_chain::service::ChainSpec {}).map_err(error)
 }
 #[wasm_bindgen]
+pub fn transaction_request(txid: &str) -> Result<Vec<u8>, JsValue> {
+    let mut hash =
+        hex::decode(txid).map_err(|_| JsValue::from_str("This is not a transaction id."))?;
+    hash.reverse();
+    tidvar_chain::transport::request(&tidvar_chain::service::TxFilter {
+        block: None,
+        index: 0,
+        hash,
+    })
+    .map_err(error)
+}
+/// Parses the server's bytes and recomputes the transaction id from them.
+#[wasm_bindgen]
+pub fn transaction_check(reply: &[u8]) -> Result<String, JsValue> {
+    let raw: tidvar_chain::service::RawTransaction =
+        tidvar_chain::transport::unary(reply).map_err(error)?;
+    let parsed = zcash_primitives::transaction::Transaction::read(
+        raw.data.as_slice(),
+        zcash_protocol::consensus::BranchId::Nu7,
+    )
+    .map_err(|_| JsValue::from_str("The server returned bytes that are not a transaction."))?;
+    json(
+        &serde_json::json!({"txid": parsed.txid().to_string(), "height": raw.height, "bytes": raw.data.len()}),
+    )
+}
+#[wasm_bindgen]
 pub fn info_request() -> Result<Vec<u8>, JsValue> {
     tidvar_chain::transport::request(&tidvar_chain::service::Empty {}).map_err(error)
 }

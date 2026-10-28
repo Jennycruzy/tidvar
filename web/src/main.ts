@@ -323,6 +323,34 @@ element<HTMLButtonElement>("refund").onclick=async()=>{
   }catch(failure){status.textContent=failure instanceof Error?failure.message:"The refund could not be signed yet.";}
   finally{button.disabled=false;}
 };
+if(location.pathname==="/check"){
+  element("check").hidden=false;document.getElementById("setup")?.setAttribute("hidden","");
+  element<HTMLButtonElement>("check-run").onclick=async()=>{
+    const button=element<HTMLButtonElement>("check-run"),status=element("check-status"),results=element("check-results");
+    button.disabled=true;results.textContent="";
+    try{
+      const runs=await (await fetch("/v1/evidence",{credentials:"omit",cache:"no-store"})).json() as {name:string;ending:string;transactions:{role:string;txid:string;height:number}[]}[];
+      let total=0,good=0;
+      for(const run of runs){
+        const row=document.createElement("p");row.className="detail";row.textContent=run.name+" ("+run.ending+"): checking";results.append(row);
+        const parts:string[]=[];
+        for(const recorded of run.transactions){
+          total++;
+          try{
+            const found=await call("check_tx",recorded.txid) as {txid:string;height:number};
+            const ok=found.txid===recorded.txid && found.height===recorded.height;
+            if(ok)good++;
+            parts.push(recorded.role+" "+recorded.txid.slice(0,10)+"… block "+found.height+(ok?" ✓":" ✗ (recorded "+recorded.height+")"));
+          }catch{parts.push(recorded.role+" "+recorded.txid.slice(0,10)+"… not found ✗");}
+          row.textContent=run.name+" ("+run.ending+"): "+parts.join(" · ");
+          status.textContent=good+" of "+total+" transactions match so far.";
+        }
+      }
+      status.textContent=good+" of "+total+" transactions match the public chain, re-checked at "+new Date().toLocaleTimeString()+".";
+    }catch(failure){status.textContent=failure instanceof Error?failure.message:"The check could not run.";}
+    finally{button.disabled=false;}
+  };
+}
 if(location.pathname==="/judge"){
   element("judge").hidden=false;document.getElementById("setup")?.setAttribute("hidden","");
   element<HTMLButtonElement>("judge-submit").onclick=async()=>{

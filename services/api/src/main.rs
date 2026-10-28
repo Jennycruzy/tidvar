@@ -47,6 +47,7 @@ pub struct App {
     limits: Arc<Mutex<BTreeMap<IpAddr, Limits>>>,
     web: Arc<PathBuf>,
     judges: Arc<PathBuf>,
+    evidence: Arc<(Vec<serde_json::Value>, BTreeSet<Vec<u8>>)>,
     proofs: Arc<tidvar_payee::proof::Proofs>,
     payments: Arc<Mutex<PaymentWindows>>,
 }
@@ -148,13 +149,16 @@ async fn relay(
     }
     let mut client = app.chain.lock().await.clone();
     let reply = client
-        .relay(method, &body[5..], &BTreeSet::new())
+        .relay(method, &body[5..], &app.evidence.1)
         .await
         .map_err(|_| Failure::unavailable())?;
     Ok(bytes_response("application/grpc-web+proto", reply))
 }
 async fn files(State(app): State<App>, uri: Uri) -> Result<Response, Failure> {
-    let path = if matches!(uri.path(), "/" | "/open" | "/tab" | "/vpn" | "/judge") {
+    let path = if matches!(
+        uri.path(),
+        "/" | "/open" | "/tab" | "/vpn" | "/judge" | "/check"
+    ) {
         "index.html"
     } else {
         uri.path().trim_start_matches('/')
@@ -178,6 +182,51 @@ async fn files(State(app): State<App>, uri: Uri) -> Result<Response, Failure> {
         .await
         .map_err(|_| Failure(StatusCode::NOT_FOUND, "This page was not found."))?;
     Ok(bytes_response(content_type, body))
+}
+/// The recorded runs for this network (the same files `tidvar verify` checks). Only their
+/// transactions may be fetched through the relay, so `/check` can re-verify them.
+fn load_evidence(network: Network) -> (Vec<serde_json::Value>, BTreeSet<Vec<u8>>) {
+    let folder = PathBuf::from(
+        std::env::var("TIDVAR_EVIDENCE_DIR").unwrap_or_else(|_| "/root/tidvar/evidence".to_owned()),
+    )
+    .join(match network {
+        Network::Mainnet => "mainnet",
+        Network::Testnet => "testnet",
+    })
+    .join("runs");
+    let mut paths: Vec<PathBuf> = fs::read_dir(&folder)
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .collect()
+        })
+        .unwrap_or_default();
+    paths.retain(|path| path.extension().is_some_and(|ext| ext == "json"));
+    paths.sort();
+    let mut runs = Vec::new();
+    let mut hashes = BTreeSet::new();
+    for path in paths {
+        let Ok(run) = fs::read(&path)
+            .map_err(|_| ())
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|_| ()))
+        else {
+            continue;
+        };
+        for transaction in run["transactions"].as_array().into_iter().flatten() {
+            if let Some(mut hash) = transaction["txid"]
+                .as_str()
+                .and_then(|txid| hex::decode(txid).ok())
+            {
+                hash.reverse();
+                hashes.insert(hash);
+            }
+        }
+        runs.push(run);
+    }
+    (runs, hashes)
+}
+async fn evidence(State(app): State<App>) -> Json<Vec<serde_json::Value>> {
+    Json(app.evidence.0.clone())
 }
 /// An encrypted judge-tab backup. Only the judge code (held by the judge) can unlock it.
 async fn judge_bundle(
@@ -277,6 +326,7 @@ async fn main() -> anyhow::Result<()> {
         limits: Arc::new(Mutex::new(BTreeMap::new())),
         web: Arc::new(web),
         judges: Arc::new(data.join("judge")),
+        evidence: Arc::new(load_evidence(network)),
         proofs: Arc::new(tidvar_payee::proof::Proofs::build()),
         payments: Arc::new(Mutex::new(BTreeMap::new())),
     };
@@ -303,6 +353,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/tabs/{id}/settle", post(chat::settle))
         .route("/v1/lwd", post(relay))
         .route("/v1/judge/{bundle}", get(judge_bundle))
+        .route("/v1/evidence", get(evidence))
         .fallback(files)
         .layer(DefaultBodyLimit::max(MAX_MESSAGE_BYTES))
         .with_state(app);
