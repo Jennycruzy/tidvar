@@ -6,7 +6,6 @@ After=network.target
 ExecStart=/opt/tidvar-model/llama/llama-server -m /opt/tidvar-model/qwen2.5-1.5b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 27463 -t 2 -c 4096 -np 1 --no-slots --log-disable
 Restart=on-failure
 RestartSec=5
-Nice=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

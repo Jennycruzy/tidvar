@@ -12,7 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Longest prompt accepted, in characters.
 pub const MAX_PROMPT_CHARS: usize = 2_000;
-const MAX_ANSWER_TOKENS: u32 = 400;
+const MAX_ANSWER_TOKENS: u32 = 250;
 const MODEL_TIMEOUT: Duration = Duration::from_secs(150);
 const SYSTEM: &str = "You are Tidvar Chat, a private assistant running on the service's own server; the user pays one cent per answer in shielded Zcash. Facts you may use: Zcash is a cryptocurrency with shielded (private) payments. A payment channel locks money once on chain, then sends many signed off-chain payments, and settles with one closing transaction; Tidvar is a payment channel on Zcash. Answer accurately, plainly and briefly. If you are not sure, say so.";
 

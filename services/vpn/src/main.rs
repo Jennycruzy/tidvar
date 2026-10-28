@@ -153,6 +153,8 @@ fn run() -> Result<()> {
     }
     eprintln!("Tidvar VPN controller ready.");
     let mut shaped = HashSet::new();
+    // Tabs that are closing with no peer installed need no more work until a restart.
+    let mut finished: HashSet<[u8; 32]> = HashSet::new();
     loop {
         let cycle = Instant::now();
         let registered = store.peers()?;
@@ -172,6 +174,9 @@ fn run() -> Result<()> {
         }
         let mut admitted = false;
         for peer in registered {
+            if finished.contains(&peer.tab_id) && !current.contains(&peer.public_key) {
+                continue;
+            }
             let sampled = now()?;
             let usage = if let Some(actual) = observed
                 .peers
@@ -194,6 +199,10 @@ fn run() -> Result<()> {
             {
                 balance = store.pause_vpn(&peer.tab_id, sampled)?;
                 eprintln!("VPN paused for {} at {}.", limit.code(), sampled);
+            }
+            if balance.closing && !current.contains(&peer.public_key) {
+                finished.insert(peer.tab_id);
+                continue;
             }
             if balance.running && !current.contains(&peer.public_key) {
                 store.recover_vpn(&peer.tab_id)?;

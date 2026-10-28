@@ -59,6 +59,7 @@ host.onmessage = async event => {
       const beacon=await (await fetch(base+"/public/"+record.body.refund_round,{credentials:"omit",cache:"no-store"})).text();
       result={bytes:payer.refund_transaction(info,beacon),round:record.body.refund_round};
     }
+    else if (type === "paid") result = {...await current().fetchPaid(String(value), chain), meter: meter()};
     else if (type === "chat") result = {...await current().chat(String(value), chain), meter: meter()};
     else if (type === "vpn") result = {reply: await current().vpn(value as Parameters<Tab["vpn"]>[0]), meter: meter()};
     else if (type === "close") result={reply:await current().close(chain),meter:meter()};

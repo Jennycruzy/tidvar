@@ -299,6 +299,15 @@ async function closeTab():Promise<void>{
   }
 }
 element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+element<HTMLButtonElement>("paid-call").onclick=async()=>{
+  const button=element<HTMLButtonElement>("paid-call"),status=element("paid-status");
+  button.disabled=true;status.textContent="Paying 2,000 zat from this tab.";
+  try{
+    const result=await call("paid","/paid/fact") as {body:string;meter:Meter};
+    showMeter(result.meter);status.textContent="Paid 2,000 zat. The API answered: "+result.body;observe("paid_call");
+  }catch(failure){status.textContent=failure instanceof Error?failure.message:"The paid call was not charged.";}
+  finally{button.disabled=false;}
+};
 element<HTMLButtonElement>("refund").onclick=async()=>{
   const button=element<HTMLButtonElement>("refund"),status=element("close-status");
   button.disabled=true;status.textContent="Checking the public time signal and signing your refund alone.";

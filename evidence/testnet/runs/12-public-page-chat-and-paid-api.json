@@ -1,0 +1,17 @@
+{
+  "name": "12-public-page-chat-and-paid-api",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "c207977a28438c21af49df14a7e5c9ed66423937008fcb47d6716feba3e1d35c",
+      "height": 4549082
+    },
+    {
+      "role": "close",
+      "txid": "eca5a0e528e6175d118c5a808d171d41455c1ab18477d3d5d1d34463871fc817",
+      "height": 4549154
+    }
+  ]
+}
