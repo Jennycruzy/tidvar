@@ -20,6 +20,19 @@ Call the visible payment method on the service's cadence and call the hidden met
 
 The payment target uses the payer's own saved usage clock and caps it by the service's reported usage. The service cannot raise the target merely by reporting a larger usage value.
 
+## Top up and renew
+
+`tab.topUp(amountZat)` returns the request for paying more into the same tab address (`address`, `amount`,
+`uri` as a ZIP-321 link). Any wallet can pay it. `tab.received()` reports the notes the tab has seen, their
+value and how many the service has counted; the tab resyncs as soon as the service reports a newly counted
+note, and from then on the extra value can be spent. The tab counts at most four notes.
+
+`tab.renew(openNext, progress)` closes the tab into a new one in a single transaction. `openNext(funded)` must
+open the next tab (new keys, new protection, new refund time) for exactly `funded` zat, the amount the close
+returns, and give back its `id` and `address`. The service is paid what was used, and the change output funds
+the next tab, so the payer's wallet pays nothing. The service signs only if the next tab is its own, on the
+same network and for that amount.
+
 ## Native service interfaces
 
 `Store` persists accepted records, issued signing values, the newest verified IOU, receipts and usage. `payments::verify` checks a transaction against the accepted record, confirmed funding notes and a real tree root. A changed witness requires a native proof dry run.
@@ -57,9 +70,9 @@ once from your wallet, and the tab's size is the agent's hard spending limit, en
 tab key and encrypted backup live in `~/.tidvar-agent` (mode 600).
 
 ```sh
-tidvar-agent open --service https://tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
+tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
 tidvar-agent ask "What is a payment channel?"      # 1,000 zat from the tab
-tidvar-agent fetch https://tidvar.38-49-216-59.sslip.io/paid/fact
+tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/paid/fact
 tidvar-agent close                                  # the rest returns to your address
 ```
 
@@ -69,5 +82,5 @@ As an MCP stdio server (`tidvar-agent mcp`), it offers `tab_status`, `ask`, `fet
 {"mcpServers": {"tidvar": {"command": "node", "args": ["packages/tidvar-agent/agent.mjs", "mcp"]}}}
 ```
 
-Recorded run: an agent tab of 0.0005 TAZ paid for 29 answers. The 30th was refused by the tab itself, and the
+The testnet service is `https://tidvar.38-49-216-59.sslip.io` (TAZ). Recorded run: an agent tab of 0.0005 TAZ paid for 29 answers. The 30th was refused by the tab itself, and the
 close paid the service exactly 29,000 zat (`evidence/testnet/runs/14-agent-spending-limit`).

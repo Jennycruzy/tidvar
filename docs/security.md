@@ -29,6 +29,13 @@ time (S2). It cannot present a request or IOU from another tab (S6), reuse a non
 IOU. Every IOU is checked for amounts, outputs, fee, branch, expiry and a real anchor, and is proven whenever the
 witness changes.
 
+**Top-up and renew.** A top-up is an ordinary payment to the tab address, so it is as private as the funding.
+The service counts a note only after one confirmation, and an IOU spends only notes both sides have counted,
+so a top-up nobody has counted yet is never at risk and returns in the refund. A renew is one cooperative close:
+the payer signs it only to a new tab it opened itself, and the service signs only if that tab is its own and
+its amount equals the change. The new tab has new keys and a new refund time, so on chain it looks like any
+other close followed by a new tab.
+
 **A network observer.** It sees HTTPS to the service and WireGuard traffic to the VPN, as with any VPN. On
 chain, see the table above.
 

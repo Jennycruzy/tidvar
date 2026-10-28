@@ -18,7 +18,7 @@ Fixed when the tab opens, inside the tab record P and S both sign (`crates/tidva
 | `V` funded | at least 50,000 zat, paid by one ordinary shielded payment (a wallet may split it into up to 4 notes) | `params.rs` `spendable` |
 | `F` fee reserve | 20,000 zat; `M = V − F` is the most S can ever be paid | `params.rs` |
 | `C(n)` close fee | `5,000 · max(2, n)` for `n` tab notes (ZIP-317, matching ordinary wallets); `F − C(n)` returns to P | `params.rs` `close_fee` |
-| Lifetime `L` | 3, 7 or 30 days; 15 minutes on testnet only (to show the refund end to end) | `params.rs` `Lifetime`, `record.rs` `Terms::validate` |
+| Lifetime `L` | 2 hours, 3, 7 or 30 days; 15 minutes on testnet only (to show the refund end to end) | `params.rs` `Lifetime`, `record.rs` `Terms::validate` |
 | Deadlines | `T_refund = T_open + L`; `T_pack = T_refund − min(18 h, 7L/8)`; `T_watch = T_refund − min(12 h, 3L/4)`; `T_close = T_refund − min(6 h, L/2)`; always `T_open < T_pack < T_watch < T_close < T_refund` | `params.rs` `Deadlines` |
 | Refund round `R` | the drand quicknet round at `T_refund` | `tidvar-seal` `round_at` |
 | IOU expiry | `h_open + ceil(L / 20 s)` blocks, so a payment transaction outlives `T_close` on every network | `params.rs` `iou_expiry` |
