@@ -39,6 +39,11 @@ Every run below is a real transaction on the public chain, re-checked by `tidvar
 | Watchtower | 1 | The service was stopped; a separate process holding no keys published its close |
 | Top-up + renew | 1 + 1 | A tab paid past its first payment's limit after a top-up, then rolled into a new tab in one transaction |
 
+**MAINNET:** an Android phone opened a 0.0005 ZEC tab on the [mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io),
+paid it from a Zingo wallet, connected the VPN and streamed payments; the watchtower then published the tab's
+close on its own (funding `c00483ad…`, close `ffb745da…` in block 3,533,748; `evidence/mainnet/runs/`,
+`tidvar verify --network mainnet`).
+
 **16 tabs, 33 transactions, all on TESTNET** (`evidence/testnet/runs/`). VPN cut-off after payments stop:
 12.8–27.8 s, measured on an Android phone, desktop Chrome and Firefox. Pause cuts it in about 1 second.
 
@@ -67,6 +72,7 @@ transaction from the public Zcash server and recomputes its id from the raw byte
 
 ```sh
 cargo install --git https://github.com/Jennycruzy/tidvar tidvar-cli
+tidvar verify --network mainnet
 tidvar verify --network testnet
 ```
 

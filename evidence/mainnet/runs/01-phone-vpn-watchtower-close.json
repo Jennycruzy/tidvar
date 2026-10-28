@@ -1,0 +1,17 @@
+{
+  "name": "01-phone-vpn-watchtower-close",
+  "ending": "watchtower",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "c00483ad876a3103cbb1b29e41f8570c0c187c073b4f1179fd51fcdc6a2ea75f",
+      "height": 3533747
+    },
+    {
+      "role": "watchtower",
+      "txid": "ffb745da6f1e17ca60004783093d999ca3f9c71e974ada728a7c4c71fe24038f",
+      "height": 3533748
+    }
+  ]
+}
