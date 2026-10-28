@@ -66,10 +66,17 @@ function amount(text: string): number {
   const value = BigInt(whole) * 100000000n + BigInt(fraction.padEnd(8, "0"));
   if (value < 50000n || value > 2100000000000000n) throw new Error(`Open a tab with at least 0.0005 ${unit}.`);return Number(value);
 }
+// Shows the backup words as a numbered grid; copying the grid still gives them space-separated.
+function showWords(target: HTMLElement, words: string): void {
+  target.replaceChildren(...words.split(/\s+/).filter(Boolean).flatMap((word, index) => {
+    const cell = document.createElement("span");cell.dataset.n = String(index + 1);cell.textContent = word;
+    return [cell, document.createTextNode(" ")];
+  }));
+}
 const protect = element<HTMLButtonElement>("protect");
 protect.onclick = async () => {
   protect.disabled = true;error.textContent = "";progress.textContent = "Protecting this tab on your device.";
-  try {element("phrase").textContent = String(await call("protect"));element("protection").hidden = false;progress.textContent = "Save your words before continuing.";}
+  try {showWords(element("phrase"), String(await call("protect")));element("protection").hidden = false;progress.textContent = "Save your words before continuing.";}
   catch (failure) {error.textContent = failure instanceof Error ? failure.message : "This step could not finish.";protect.disabled = false;}
 };
 let funding: {address: string; amount: string; uri: string} | undefined;
@@ -323,7 +330,7 @@ element<HTMLButtonElement>("renew").onclick=()=>{element("renew-panel").hidden=!
 element<HTMLButtonElement>("renew-protect").onclick=async()=>{
   const button=element<HTMLButtonElement>("renew-protect"),status=element("renew-status");
   button.disabled=true;
-  try{element("renew-phrase").textContent=String(await call("renew_protect"));element("renew-words").hidden=false;status.textContent="Save the new words before renewing.";}
+  try{showWords(element("renew-phrase"),String(await call("renew_protect")));element("renew-words").hidden=false;status.textContent="Save the new words before renewing.";}
   catch(failure){status.textContent=failure instanceof Error?failure.message:"The new tab could not be protected.";button.disabled=false;}
 };
 element<HTMLButtonElement>("renew-submit").onclick=async()=>{
@@ -471,6 +478,7 @@ void fetch("/v1/offer",{credentials:"omit",cache:"no-store"}).then(r=>r.json()).
     return;
   }
   unit="ZEC";
+  document.body.dataset.net="mainnet";
   document.querySelectorAll(".unit").forEach(node=>{node.textContent="ZEC";});
   document.querySelectorAll(".net").forEach(node=>{node.textContent="MAINNET";});
 }).catch(()=>undefined);
