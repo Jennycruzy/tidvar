@@ -242,11 +242,22 @@ fn run() -> Result<()> {
             let allowed = !balance.paused
                 && !balance.closing
                 && (balance.running || params::can_start_vpn(balance.paid, balance.used));
-            if allowed && !current.contains(&peer.public_key) && current.len() < 50 && !admitted {
+            // A tab that is not closing always has its tunnel installed; when it may not use the VPN
+            // (paused or unpaid) the tunnel is blocked from the internet but still reaches us.
+            if (allowed || !balance.closing)
+                && !current.contains(&peer.public_key)
+                && current.len() < 50
+                && !admitted
+            {
                 let started = Instant::now();
                 if !shaped.contains(&peer.slot) {
                     traffic::configure(&peer)?;
                     shaped.insert(peer.slot);
+                }
+                if !allowed {
+                    // Blocked before the tunnel exists, so an unpaid peer never gets a moment online.
+                    block(peer.address()?, true)?;
+                    blocked.insert(peer.public_key);
                 }
                 store.reset_transfer_counter(&peer.tab_id, now()?)?;
                 DeviceUpdate::new()
@@ -257,14 +268,19 @@ fn run() -> Result<()> {
                     )
                     .apply(&name, Backend::Kernel)
                     .map_err(|_| anyhow::anyhow!("A VPN connection could not be admitted."))?;
-                if let Err(error) = store.resume_vpn(&peer.tab_id, now()?) {
+                if allowed && let Err(error) = store.resume_vpn(&peer.tab_id, now()?) {
                     remove(&name, peer.public_key)?;
                     return Err(error.into());
                 }
                 current.insert(peer.public_key);
                 admitted = true;
                 eprintln!(
-                    "VPN connected at {} in {}us.",
+                    "VPN {} at {} in {}us.",
+                    if allowed {
+                        "connected"
+                    } else {
+                        "installed blocked"
+                    },
                     now()?,
                     started.elapsed().as_micros()
                 );
