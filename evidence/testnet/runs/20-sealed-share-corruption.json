@@ -1,0 +1,19 @@
+{
+  "network": "LOCAL",
+  "recorded_at": "2026-10-28T09:03:27.538545+00:00",
+  "tests": [
+    "at5_one_corrupt_opened_share_refuses_funding",
+    "at5_corrupt_unopened_half_cannot_release_a_refund_key",
+    "at5_exactly_thirty_two_valid_shares_over_ten_thousand_challenges"
+  ],
+  "valid_shares": 32,
+  "shares": 64,
+  "opened": 32,
+  "trials": 10000,
+  "accepted": 0,
+  "combinations": 1832624140942590534,
+  "exact_probability": 5.456656264964734e-19,
+  "refusal": "The service's sealed key failed our check, so we didn't open the tab. No money moved.",
+  "method": "Each real encrypted share is cryptographically checked once. Production CSPRNG challenges are sampled 10000 times against the resulting fixed validity set. Conditional full verification and decryption failure are separate tests.",
+  "limitation": "Zero observed successes do not establish the exact probability empirically. The exact probability follows from the combinatorial formula."
+}
