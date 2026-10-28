@@ -231,6 +231,8 @@ fn run() -> Result<()> {
                 balance = store.pause_vpn(&peer.tab_id, sampled)?;
                 eprintln!("VPN paused for {} at {}.", limit.code(), sampled);
             }
+            // A closing tab keeps its tunnel, blocked, so the page can still finish the close
+            // through it; the tunnel goes away when the service restarts.
             if balance.closing && !current.contains(&peer.public_key) {
                 finished.insert(peer.tab_id);
                 continue;
@@ -291,18 +293,6 @@ fn run() -> Result<()> {
                 store.resume_vpn(&peer.tab_id, now()?)?;
                 eprintln!(
                     "VPN connected at {} in {}us.",
-                    now()?,
-                    started.elapsed().as_micros()
-                );
-            } else if !allowed && balance.closing && current.contains(&peer.public_key) {
-                let started = Instant::now();
-                if blocked.remove(&peer.public_key) {
-                    block(peer.address()?, false)?;
-                }
-                remove(&name, peer.public_key)?;
-                current.remove(&peer.public_key);
-                eprintln!(
-                    "VPN disconnected at {} in {}us.",
                     now()?,
                     started.elapsed().as_micros()
                 );
