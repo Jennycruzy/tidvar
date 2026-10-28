@@ -5,9 +5,9 @@
 <p align="center"><b>Pay for exactly what you use, in private Zcash. Nobody holds your money.</b></p>
 
 <p align="center">
-<a href="https://mainnet.tidvar.38-49-216-59.sslip.io">Mainnet app</a> ·
+<a href="https://tidvar.site">Mainnet app</a> ·
 <a href="https://tidvar.38-49-216-59.sslip.io">Testnet app</a> ·
-<a href="https://mainnet.tidvar.38-49-216-59.sslip.io/check">Check it yourself</a> ·
+<a href="https://tidvar.site/check">Check it yourself</a> ·
 <a href="docs/protocol.md">Protocol</a> ·
 <a href="docs/security.md">Threat model</a> ·
 <a href="docs/kit.md">Developer kit</a>
@@ -22,7 +22,7 @@ alone at the refund time. Hundreds of payments; two transactions on chain.
 It is a payment channel on Zcash with no change to Zcash itself, and it is live on **mainnet** today with
 three uses: a VPN paid by the second, any HTTP API paid per request, and AI agents with a hard budget.
 
-> **Judges, start here (3 minutes).** Open the [mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io)
+> **Judges, start here (3 minutes).** Open the [mainnet app](https://tidvar.site)
 > and scroll the landing page. Then press **Check it yourself** in the header: it re-fetches every recorded
 > transaction from a public Zcash server and recomputes its id in your browser, no keys needed. Want to pay?
 > Use the **Testnet** switch in the header and a faucet; everything works the same with free TAZ.
@@ -49,7 +49,7 @@ than the thing being bought, and a prepaid account means the service holds your 
 
 | Use | How it is paid | Try it |
 |---|---|---|
-| **VPN** | by the second (1 zat / 6 s), kept paid 1, 8 or 24 hours ahead so a locked phone keeps it on; Pause, Resume, Close | the [app](https://mainnet.tidvar.38-49-216-59.sslip.io/open) and the standard WireGuard app |
+| **VPN** | by the second (1 zat / 6 s), kept paid 1, 8 or 24 hours ahead so a locked phone keeps it on; Pause, Resume, Close | the [app](https://tidvar.site/open) and the standard WireGuard app |
 | **Any HTTP API** | per request, any price per path, through a proxy in front of an existing API (no code change); every 402 speaks **x402 v2** | live: an unmodified llama.cpp server's OpenAI chat API at `/llm/v1/chat/completions`, 1,000 zat a call |
 | **AI agents** | the agent funds its own tab once; the tab's size and a per-request cap are limits no prompt can raise; CLI or **MCP** tool | `tidvar-agent` (below) |
 | **Tidvar Chat** | 1,000 zat per answer, from the same tab | in the app |
@@ -170,8 +170,8 @@ charged twice.
 An agent with a hard budget, from a shell or as an MCP tool in any MCP client:
 
 ```sh
-tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
-tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
+tidvar-agent open --service https://tidvar.site --amount 0.0005 --return <your address>
+tidvar-agent fetch https://tidvar.site/llm/v1/chat/completions \
   --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close
 node packages/tidvar-agent/agent.mjs mcp   # tab_status, ask, fetch_paid, close_tab

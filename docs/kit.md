@@ -81,7 +81,7 @@ pays over x402 whenever a route offers `tidvar-tab`.
 ```sh
 TIDVAR_UPSTREAM=http://127.0.0.1:3000 \
 TIDVAR_ROUTES='/api/search=3000,/api/*=500' \
-TIDVAR_OFFER_JSON="$(curl -s https://mainnet.tidvar.38-49-216-59.sslip.io/v1/offer)" \
+TIDVAR_OFFER_JSON="$(curl -s https://tidvar.site/v1/offer)" \
 TIDVAR_DATA_DIR=/root/tidvar-data-main TIDVAR_KIT_LISTEN=127.0.0.1:27468 tidvar-kit-demo
 ```
 
@@ -97,10 +97,10 @@ once from your wallet, and the tab's size is the agent's hard spending limit, en
 tab key and encrypted backup live in `~/.tidvar-agent` (mode 600).
 
 ```sh
-tidvar-agent open --service https://mainnet.tidvar.38-49-216-59.sslip.io --amount 0.0005 --return <your address>
+tidvar-agent open --service https://tidvar.site --amount 0.0005 --return <your address>
 tidvar-agent ask "What is a payment channel?"      # 1,000 zat from the tab
-tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/paid/fact
-tidvar-agent fetch https://mainnet.tidvar.38-49-216-59.sslip.io/llm/v1/chat/completions \
+tidvar-agent fetch https://tidvar.site/paid/fact
+tidvar-agent fetch https://tidvar.site/llm/v1/chat/completions \
   --data '{"messages":[{"role":"user","content":"What is a payment channel?"}]}'
 tidvar-agent close                                  # the rest returns to your address
 ```

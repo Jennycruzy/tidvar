@@ -1,6 +1,6 @@
 # Security
 
-Tidvar runs on Zcash mainnet and testnet. Each tab is a separate lock: the most it can ever put at risk is its own amount, so open small tabs. The service at `mainnet.tidvar.38-49-216-59.sslip.io` takes ZEC; the one at `tidvar.38-49-216-59.sslip.io` takes testnet TAZ only.
+Tidvar runs on Zcash mainnet and testnet. Each tab is a separate lock: the most it can ever put at risk is its own amount, so open small tabs. The service at `tidvar.site` takes ZEC; the one at `tidvar.38-49-216-59.sslip.io` takes testnet TAZ only.
 
 ## Keys
 

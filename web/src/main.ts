@@ -96,10 +96,10 @@ copyWords("renew-phrase", "copy-renew-phrase");
 }
 // The network switch: the same page on the other network's service.
 {
-  const mainnet = location.hostname === "tidvar.site" || location.hostname.startsWith("mainnet.");
+  const mainnet = location.hostname.endsWith("tidvar.site") || location.hostname.startsWith("mainnet.");
   const path = location.pathname + location.search;
   const main = element<HTMLAnchorElement>("net-main"), test = element<HTMLAnchorElement>("net-test");
-  main.href = (location.hostname === "tidvar.site" || location.hostname === "www.tidvar.site" ? "https://tidvar.site" : main.href.replace(/\/$/, "")) + path;
+  main.href = "https://tidvar.site" + path;
   test.href = test.href.replace(/\/$/, "") + path;
   (mainnet ? main : test).setAttribute("aria-current", "true");
 }
