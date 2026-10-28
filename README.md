@@ -53,7 +53,7 @@ the service exactly 29,000 zat and returned 11,000 (`evidence/testnet/runs/14-ag
 
 1. Open the [mainnet app](https://mainnet.tidvar.38-49-216-59.sslip.io/open) (ZEC) or the
    [testnet app](https://tidvar.38-49-216-59.sslip.io/open) (TAZ, free from a faucet).
-2. Choose an amount (at least 0.0005) and how long the tab lasts: 2 hours, 3, 7 or 30 days. That is also when
+2. Choose an amount (at least 0.0005) and how long the tab lasts: 15 or 30 minutes, 2 hours, 3, 7 or 30 days. That is also when
    your money comes back to you alone if the service disappears.
 3. Paste a fresh receive address from your wallet for the change, write down the 24 words, then pay the QR
    code from any Zcash wallet with Ironwood (Zodl, Zingo).

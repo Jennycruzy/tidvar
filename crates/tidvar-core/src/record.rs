@@ -237,9 +237,7 @@ impl Terms {
     pub fn validate(&self, offer: &Offer) -> Result<Deadlines, RecordError> {
         offer.validate()?;
         params::spendable(self.funded).map_err(|_| RecordError::Terms)?;
-        if self.lifetime.seconds() * 1000 > offer.maximum_lifetime_ms
-            || (self.lifetime == Lifetime::Minutes15 && offer.network != Network::Testnet)
-        {
+        if self.lifetime.seconds() * 1000 > offer.maximum_lifetime_ms {
             return Err(RecordError::Terms);
         }
         receiver(&self.return_address, offer.network)?;

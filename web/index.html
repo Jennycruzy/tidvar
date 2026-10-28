@@ -34,7 +34,7 @@
   <h2 class="card-title">Open a tab</h2>
   <div class="grid-2">
     <label>Amount (<span class="unit">TAZ</span>)<input id="amount" value="0.0005" inputmode="decimal" required></label>
-    <label>How long the tab lasts<select id="lifetime"><option value="Hours2">2 hours</option><option value="Days3" selected>3 days</option><option value="Days7">7 days</option><option value="Days30">30 days</option></select></label>
+    <label>How long the tab lasts<select id="lifetime"><option value="Minutes15">15 minutes</option><option value="Minutes30">30 minutes</option><option value="Hours2">2 hours</option><option value="Days3" selected>3 days</option><option value="Days7">7 days</option><option value="Days30">30 days</option></select></label>
   </div>
   <p class="hint">At least 0.0005. A longer tab means fewer network fees, but a longer wait for your refund if we disappear.</p>
   <label>Return address<input id="return-address" autocomplete="off" spellcheck="false" placeholder="Paste a fresh receive address from your wallet" required></label>
@@ -154,7 +154,7 @@
     <section id="renew-panel" class="inset" hidden>
       <h3>Renew this tab</h3>
       <p class="hint">One transaction closes this tab, pays the service what you used, and moves everything else into a new tab with a fresh refund time. No new payment from your wallet. The new tab has its own keys and its own backup words.</p>
-      <label>How long the new tab lasts<select id="renew-lifetime"><option value="Hours2">2 hours</option><option value="Days3" selected>3 days</option><option value="Days7">7 days</option><option value="Days30">30 days</option></select></label>
+      <label>How long the new tab lasts<select id="renew-lifetime"><option value="Minutes15">15 minutes</option><option value="Minutes30">30 minutes</option><option value="Hours2">2 hours</option><option value="Days3" selected>3 days</option><option value="Days7">7 days</option><option value="Days30">30 days</option></select></label>
       <button id="renew-protect" class="secondary">Protect the new tab</button>
       <div id="renew-words" hidden>
         <p class="hint">Save these 24 words for the new tab. Never send them to anyone or show them in a recording.</p>

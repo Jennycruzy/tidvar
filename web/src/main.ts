@@ -472,11 +472,7 @@ element<HTMLButtonElement>("download-timings").onclick=()=>{
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 void fetch("/v1/offer",{credentials:"omit",cache:"no-store"}).then(r=>r.json()).then((offer:{network:string})=>{
-  if(offer.network!=="Mainnet"){
-    const option=document.createElement("option");option.value="Minutes15";option.textContent="15 minutes (testnet: see the refund)";
-    document.getElementById("lifetime")?.append(option);
-    return;
-  }
+  if(offer.network!=="Mainnet")return;
   unit="ZEC";
   document.body.dataset.net="mainnet";
   document.querySelectorAll(".unit").forEach(node=>{node.textContent="ZEC";});
