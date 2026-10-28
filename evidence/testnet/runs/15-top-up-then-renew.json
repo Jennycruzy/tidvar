@@ -1,0 +1,22 @@
+{
+  "name": "15-top-up-then-renew",
+  "ending": "renew",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "7a2507eb7c7d0e3879ccfd15c7c5d6db6f8ff75fd3e955cf7f3bce89b887e773",
+      "height": 4549563
+    },
+    {
+      "role": "top-up",
+      "txid": "0fe80fa4ce7c9036094d7c8da5a010ad26a0b0958a4d1f1bfc85b63e039eee5b",
+      "height": 4549569
+    },
+    {
+      "role": "renew",
+      "txid": "22a277144e786d16098df932e5d6907806c6f9122e7d5136adb894cc58be00dc",
+      "height": 4549626
+    }
+  ]
+}

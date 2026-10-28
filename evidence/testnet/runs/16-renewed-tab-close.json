@@ -1,0 +1,17 @@
+{
+  "name": "16-renewed-tab-close",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "22a277144e786d16098df932e5d6907806c6f9122e7d5136adb894cc58be00dc",
+      "height": 4549626
+    },
+    {
+      "role": "close",
+      "txid": "d993a92fc4708e8a9dc2effa62c9c00a6cae9e4db9e7b462d159834ffeb3c22e",
+      "height": 4549631
+    }
+  ]
+}

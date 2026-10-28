@@ -34,3 +34,7 @@ bf59104d7379a13b1b642b4f8e3f1c0c7d0ffeb34788260a3490a3aaf450b68b  testnet/runs/1
 5753af3e9fab36b067a3132ded2d0e7e47c4bd6ef531a3a33b22f0ef436e6db5  testnet/runs/13-refund-after-slow-funding.md
 dea075929d10d8c479c02afed2d8b2ae1d795c351c760b26369af1fb3d000265  testnet/runs/14-agent-spending-limit.json
 58a60ada95fd43fd4973c98a3e52d57f78087c90b0bc3b5b8eac3569a7962522  testnet/runs/14-agent-spending-limit.md
+3b78e9683f032ea02503e501a7ab4155b7134b1e06083afd4df3bc8e31f15155  testnet/runs/15-top-up-then-renew.json
+63e8550322698f30649deed1d930e1108aa7ae0217345b8384394c95a113ff6d  testnet/runs/15-top-up-then-renew.md
+3430776784124ffc89a77ba1c70ad7b7b756d632601abae55de14745d0b74bba  testnet/runs/16-renewed-tab-close.json
+5deaa0599ba8a5a304f366b65e39167016b6aae9b89192c87c4a985a4a9f9449  testnet/runs/16-renewed-tab-close.md

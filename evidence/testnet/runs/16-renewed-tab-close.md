@@ -1,0 +1,1 @@
+The tab funded by the renew in run 15 (57,000 zat, no wallet payment from the payer). It opened as soon as the renew was mined, then closed: the service took 0 zat and 47,000 zat returned to the payer's address.
