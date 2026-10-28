@@ -216,6 +216,8 @@ export class Tab {
   }
   /** How long a payment made while the page is hidden keeps the VPN paid: 1 hour unless set (at most 24). */
   awayMs = 3_600_000;
+  /** Keep the VPN paid `awayMs` ahead on every payment, visible or not, so a frozen or closed page never cuts it. */
+  keepAhead = false;
   async pay(hidden: boolean, progress: (height:bigint,value:bigint)=>void, extra = 0): Promise<PaymentEvent | undefined> {
     await this.deliver();
     const payer=this.opening.session.current();
@@ -225,7 +227,7 @@ export class Tab {
     if(!hidden)await this.nonces();
     const used=this.balance?.used ?? 0;
     if(!Number.isSafeInteger(used) || used<0)throw new Error("The service returned an invalid usage amount.");
-    let amount=hidden?payer.payment_target_ahead(BigInt(Date.now()),BigInt(this.awayMs),BigInt(used)):payer.payment_target(BigInt(Date.now()),false,BigInt(used));
+    let amount=hidden||this.keepAhead?payer.payment_target_ahead(BigInt(Date.now()),BigInt(this.awayMs),BigInt(used)):payer.payment_target(BigInt(Date.now()),false,BigInt(used));
     if(extra>0 && BigInt(used+extra)>amount)amount=BigInt(used+extra);
     if(amount<=payer.signed_amount())return;
     const count=payer.funding_note_count();

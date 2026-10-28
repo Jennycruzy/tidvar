@@ -53,7 +53,7 @@ host.onmessage = async event => {
       host.postMessage({observation:{step:"sync",elapsedMs:performance.now()-started,heapBytes:memory,wasmBytes:wasm?.decodedBodySize ?? null}});
     }
     else if (type === "away") {awayMs=Math.min(86_400_000,Math.max(20_000,Number(value)||3_600_000));result=awayMs;}
-    else if (type === "pay") {const tab=current();tab.awayMs=awayMs;result = {payment: await tab.pay(Boolean(value), chain) ?? null, meter: meter()};}
+    else if (type === "pay") {const tab=current();tab.awayMs=awayMs;tab.keepAhead=true;result = {payment: await tab.pay(Boolean(value), chain) ?? null, meter: meter()};}
     else if (type === "refund") {
       // The refund needs no service: a public drand beacon opens the service's sealed share.
       await opening.sync(chain);
