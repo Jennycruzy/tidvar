@@ -201,14 +201,16 @@ impl Deadlines {
         };
         let result = Self {
             pack_ms: refund - (18 * 3_600_000).min(fraction(7, 8)?),
-            watch_ms: refund - (12 * 3_600_000).min(fraction(3, 4)?),
+            // The service closes first; the watchtower publishes only if it did not, halfway to
+            // the refund time.
+            watch_ms: refund - (3 * 3_600_000).min(fraction(1, 4)?),
             close_ms: refund - (6 * 3_600_000).min(lifetime_ms / 2),
             refund_ms: refund,
         };
         if !(open_ms < result.pack_ms
-            && result.pack_ms < result.watch_ms
-            && result.watch_ms < result.close_ms
-            && result.close_ms < result.refund_ms)
+            && result.pack_ms < result.close_ms
+            && result.close_ms < result.watch_ms
+            && result.watch_ms < result.refund_ms)
         {
             return Err(AmountError::Time);
         }
@@ -300,12 +302,12 @@ mod tests {
                 short.close_ms,
                 short.refund_ms
             ),
-            (112_500, 225_000, 450_000, 900_000)
+            (112_500, 675_000, 450_000, 900_000)
         );
         let half = Deadlines::new(0, Lifetime::Minutes30.seconds() * 1000)?;
         assert_eq!(
             (half.pack_ms, half.watch_ms, half.close_ms, half.refund_ms),
-            (225_000, 450_000, 900_000, 1_800_000)
+            (225_000, 1_350_000, 900_000, 1_800_000)
         );
         let session = Deadlines::new(0, Lifetime::Hours2.seconds() * 1000)?;
         assert_eq!(
@@ -315,13 +317,13 @@ mod tests {
                 session.close_ms,
                 session.refund_ms
             ),
-            (900_000, 1_800_000, 3_600_000, 7_200_000)
+            (900_000, 5_400_000, 3_600_000, 7_200_000)
         );
         for duration in [Lifetime::Days3, Lifetime::Days7, Lifetime::Days30] {
             let seconds = duration.seconds();
             let d = Deadlines::new(0, seconds * 1000)?;
             assert_eq!(d.refund_ms - d.pack_ms, 18 * 3_600_000);
-            assert_eq!(d.refund_ms - d.watch_ms, 12 * 3_600_000);
+            assert_eq!(d.refund_ms - d.watch_ms, 3 * 3_600_000);
             assert_eq!(d.refund_ms - d.close_ms, 6 * 3_600_000);
         }
         assert_eq!(

@@ -163,6 +163,33 @@ pub async fn watch_deadlines(app: App) {
                 Err(error) => eprintln!("Watchtower pack not finished: {}", error.1),
             }
         }
+        // A watchtower close that reached the chain ends the tab: no more payments or VPN.
+        let published = now().and_then(|now| {
+            app.store
+                .lock()
+                .map_err(|_| Failure::internal())?
+                .published_packs(now)
+                .map_err(failure)
+        });
+        for (tab, txid) in published.unwrap_or_default() {
+            let Ok(found) = client.transaction(&txid).await else {
+                continue;
+            };
+            if found.height == 0 {
+                continue;
+            }
+            let closed = now().and_then(|now| {
+                let mut store = app.store.lock().map_err(|_| Failure::internal())?;
+                if store.balance(&tab, now).map_err(failure)?.closing {
+                    return Ok(false);
+                }
+                store.close_ledger(&tab, now).map_err(failure)?;
+                Ok(true)
+            });
+            if closed.unwrap_or(false) {
+                eprintln!("A watchtower close was mined; the tab is closed.");
+            }
+        }
         let due = match now().and_then(|now| {
             app.store
                 .lock()

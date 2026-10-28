@@ -70,6 +70,27 @@ impl Store {
         }
         Ok(())
     }
+    /// Watchtower closes whose publication time has passed for tabs with no close of their own.
+    pub fn published_packs(&self, now_ms: u64) -> Result<Vec<([u8; 32], String)>, PayeeError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT w.tab_id,w.txid FROM watch_packs w WHERE w.watch_ms<=?1
+                 AND NOT EXISTS (SELECT 1 FROM cooperative_closes c WHERE c.tab_id=w.tab_id)",
+            )
+            .map_err(|_| PayeeError::Storage)?;
+        let rows = statement
+            .query_map(params![now_ms], |row| {
+                Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|_| PayeeError::Storage)?;
+        let mut packs = Vec::new();
+        for row in rows {
+            let (id, txid) = row.map_err(|_| PayeeError::Storage)?;
+            packs.push((id.try_into().map_err(|_| PayeeError::Storage)?, txid));
+        }
+        Ok(packs)
+    }
     /// Tabs past their closing deadline that hold a payment and have no close yet.
     pub fn forced_close_due(&self, now_ms: u64) -> Result<Vec<[u8; 32]>, PayeeError> {
         let mut statement = self

@@ -19,7 +19,7 @@ Fixed when the tab opens, inside the tab record P and S both sign (`crates/tidva
 | `F` fee reserve | 20,000 zat; `M = V − F` is the most S can ever be paid | `params.rs` |
 | `C(n)` close fee | `5,000 · max(2, n)` for `n` tab notes (ZIP-317, matching ordinary wallets); `F − C(n)` returns to P | `params.rs` `close_fee` |
 | Lifetime `L` | 15 or 30 minutes, 2 hours, 3, 7 or 30 days | `params.rs` `Lifetime`, `record.rs` `Terms::validate` |
-| Deadlines | `T_refund = T_open + L`; `T_pack = T_refund − min(18 h, 7L/8)`; `T_watch = T_refund − min(12 h, 3L/4)`; `T_close = T_refund − min(6 h, L/2)`; always `T_open < T_pack < T_watch < T_close < T_refund` | `params.rs` `Deadlines` |
+| Deadlines | `T_refund = T_open + L`; `T_pack = T_refund − min(18 h, 7L/8)`; `T_close = T_refund − min(6 h, L/2)`; `T_watch = T_refund − min(3 h, L/4)`; always `T_open < T_pack < T_close < T_watch < T_refund`, so the watchtower publishes only if the service has not closed by its own deadline | `params.rs` `Deadlines` |
 | Refund round `R` | the drand quicknet round at `T_refund` | `tidvar-seal` `round_at` |
 | IOU expiry | `h_open + ceil(L / 20 s)` blocks, so a payment transaction outlives `T_close` on every network | `params.rs` `iou_expiry` |
 | Network | mainnet or testnet, in the offer; transactions use the consensus branch of their target height (Ironwood: NU6.3 on mainnet, NU7 on testnet) and the network's coin type | `record.rs` `Network` |

@@ -508,7 +508,7 @@ mod network_tests {
     #[test]
     fn fifteen_minute_tabs_keep_their_deadline_order() -> Result<(), crate::params::AmountError> {
         let d = Deadlines::new(1_000, Lifetime::Minutes15.seconds() * 1000)?;
-        assert!(1_000 < d.pack_ms && d.pack_ms < d.watch_ms && d.watch_ms < d.close_ms);
+        assert!(1_000 < d.pack_ms && d.pack_ms < d.close_ms && d.close_ms < d.watch_ms);
         assert_eq!(d.refund_ms - d.close_ms, 450_000);
         Ok(())
     }
