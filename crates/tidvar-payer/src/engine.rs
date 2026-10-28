@@ -24,6 +24,12 @@ pub enum PayerError {
     Transaction(#[from] tidvar_core::iou::IouError),
     #[error("This payment commitment has already been used.")]
     ReusedCommitment,
+    #[error("A tab takes at most three top-ups of at least 0.0001 while it is open.")]
+    TopUp,
+    #[error(
+        "Too little is left on this tab to renew it. Close it instead; the rest comes back to you."
+    )]
+    Renew,
     #[error(
         "This tab is already closed on chain, so nothing is left to refund. Your share came back in the close."
     )]
@@ -56,6 +62,14 @@ pub struct SignedTransaction {
     pub shares: Vec<tidvar_core::frost::Share>,
 }
 
+/// What a signature is for: a payment, a cooperative close, or a renew into the next tab.
+#[derive(Clone, Copy)]
+pub enum Signing<'a> {
+    Payment,
+    Close,
+    Renew(&'a str),
+}
+
 pub struct Setup {
     inner: FirstRound,
 }
@@ -80,6 +94,10 @@ pub struct Payer {
     paid: u64,
     channel: Channel,
     authorizer: tidvar_core::ledger::Ledger,
+    service_notes: u8,
+}
+fn one_note() -> u8 {
+    1
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -108,6 +126,8 @@ struct Backup {
     channel: Channel,
     #[serde(default)]
     authorizer: tidvar_core::ledger::Ledger,
+    #[serde(default = "one_note")]
+    service_notes: u8,
     #[serde(with = "tidvar_core::encoding::fixed32")]
     owner: [u8; 32],
 }
@@ -171,6 +191,7 @@ impl PendingPayer {
             paid: 0,
             channel: Channel::default(),
             authorizer: tidvar_core::ledger::Ledger::default(),
+            service_notes: 1,
         })
     }
 }
@@ -180,10 +201,15 @@ impl Payer {
         raw: &[u8],
         amount: u64,
         anchor_height: u64,
-        cooperative: bool,
+        signing: Signing<'_>,
         tree: tidvar_chain::service::TreeState,
         services: Vec<tidvar_core::frost::Commitment>,
     ) -> Result<SignedTransaction, PayerError> {
+        let cooperative = !matches!(signing, Signing::Payment);
+        let to = match signing {
+            Signing::Renew(address) => Some(address),
+            _ => None,
+        };
         use tidvar_core::{frost, iou};
         if tree.height != anchor_height {
             return Err(PayerError::Backup);
@@ -196,10 +222,16 @@ impl Payer {
         let anchor =
             tidvar_chain::sync::SyncState::new(&self.keys.public.viewing_key, tree)?.root();
         let pczt = pczt::Pczt::parse(raw).map_err(|_| PayerError::Backup)?;
-        let checked = iou::check(
+        let mut notes = sync.funding_notes()?;
+        if services.is_empty() || services.len() > notes.len() {
+            return Err(PayerError::Backup);
+        }
+        notes.truncate(services.len());
+        let value = iou::notes_value(&notes)?;
+        let checked = iou::check_to(
             pczt,
             record,
-            &sync.funding_notes()?,
+            &notes,
             tidvar_core::params::Amount::try_from(amount).map_err(|_| PayerError::Backup)?,
             iou::TransactionContext {
                 target: u32::try_from(anchor_height)
@@ -213,6 +245,7 @@ impl Payer {
                 },
                 anchor,
             },
+            to,
             &mut rand_core::OsRng,
         )?;
         if services.len() != checked.spends.len() {
@@ -238,7 +271,7 @@ impl Payer {
             }
         } else {
             tidvar_core::params::check_payment(
-                record.body.terms.funded,
+                value,
                 tidvar_core::params::Amount::try_from(self.paid).map_err(|_| PayerError::Backup)?,
                 tidvar_core::params::Amount::try_from(amount).map_err(|_| PayerError::Backup)?,
             )
@@ -278,9 +311,31 @@ impl Payer {
         amount: u64,
         cooperative: bool,
     ) -> Result<tidvar_core::iou::Checked, PayerError> {
+        self.transaction_to(amount, cooperative, None)
+    }
+    /// What a renew moves into the next tab: everything the close returns.
+    pub fn renew_amount(&self, used: u64) -> Result<u64, PayerError> {
+        let notes = self.spend_notes()?;
+        let fee = tidvar_core::params::close_fee(
+            u8::try_from(notes.len()).map_err(|_| PayerError::Backup)?,
+        )
+        .map_err(|_| PayerError::Backup)?;
+        tidvar_core::iou::notes_value(&notes)?
+            .value()
+            .checked_sub(used)
+            .and_then(|rest| rest.checked_sub(fee.value()))
+            .filter(|rest| *rest >= tidvar_core::params::MINIMUM_FUNDING)
+            .ok_or(PayerError::Renew)
+    }
+    pub fn transaction_to(
+        &self,
+        amount: u64,
+        cooperative: bool,
+        to: Option<&str>,
+    ) -> Result<tidvar_core::iou::Checked, PayerError> {
         let record = self.record.as_ref().ok_or(PayerError::Backup)?;
         let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
-        let notes = sync.funding_notes()?;
+        let notes = self.spend_notes()?;
         let kind = if cooperative {
             tidvar_core::iou::Kind::Cooperative
         } else {
@@ -292,22 +347,54 @@ impl Payer {
             .map_err(|_| PayerError::Backup)?
             .checked_add(1)
             .ok_or(PayerError::Backup)?;
-        Ok(tidvar_core::iou::build(
+        Ok(tidvar_core::iou::build_to(
             record,
             &notes,
             amount,
             target,
             kind,
+            to,
             &mut rand_core::OsRng,
         )?)
     }
     pub fn funding_request(&self) -> Result<FundingRequest, PayerError> {
         let record = self.record.as_ref().ok_or(PayerError::Backup)?;
+        self.payment_request(record.body.terms.funded.value())
+    }
+    /// A request for one more payment to the same tab address. The tab counts at most four
+    /// notes, so at most three top-ups, and only while it is open.
+    pub fn top_up_request(&self, amount_zat: u64) -> Result<FundingRequest, PayerError> {
+        let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
+        let notes = sync.funding_notes()?;
+        if notes.is_empty()
+            || notes.len() >= 4
+            || self
+                .authorizer
+                .balance()
+                .map_err(|_| PayerError::Backup)?
+                .closing
+        {
+            return Err(PayerError::TopUp);
+        }
+        if amount_zat < tidvar_core::params::MINIMUM_TOP_UP {
+            return Err(PayerError::TopUp);
+        }
+        self.payment_request(amount_zat)
+    }
+    /// The notes the next IOU spends: every note this payer has seen, up to the count the
+    /// service last confirmed, in chain order.
+    pub fn spend_notes(&self) -> Result<Vec<tidvar_core::iou::FundingNote>, PayerError> {
+        let sync = self.sync.as_ref().ok_or(PayerError::Backup)?;
+        let mut notes = sync.funding_notes()?;
+        notes.truncate(usize::from(self.service_notes));
+        Ok(notes)
+    }
+    fn payment_request(&self, amount_zat: u64) -> Result<FundingRequest, PayerError> {
+        let record = self.record.as_ref().ok_or(PayerError::Backup)?;
         record.verify()?;
         let address = self.keys.public.address.clone();
         let recipient = zcash_address::ZcashAddress::try_from_encoded(&address)
             .map_err(|_| PayerError::Backup)?;
-        let amount_zat = record.body.terms.funded.value();
         let amount = zcash_protocol::value::Zatoshis::from_u64(amount_zat)
             .map_err(|_| PayerError::Backup)?;
         let uri =
@@ -432,6 +519,7 @@ impl Payer {
             paid: self.paid,
             channel: self.channel.clone(),
             authorizer: self.authorizer.clone(),
+            service_notes: self.service_notes,
             owner: reddsa::VerificationKey::from(&record_key).into(),
         };
         Ok(Zeroizing::new(
@@ -490,7 +578,11 @@ impl Payer {
             paid: backup.paid,
             channel: backup.channel,
             authorizer: backup.authorizer,
+            service_notes: backup.service_notes,
         };
+        if !(1..=4).contains(&restored.service_notes) {
+            return Err(PayerError::Backup);
+        }
         if let Some(record) = backup.record {
             record.verify()?;
             let expected =
@@ -512,7 +604,16 @@ impl Payer {
             {
                 return Err(PayerError::Backup);
             }
-            if restored.paid > record.body.maximum_payment.value() {
+            // Top-ups raise the most that can be signed by their value.
+            let value = restored
+                .sync
+                .as_ref()
+                .map(SyncState::value)
+                .transpose()?
+                .unwrap_or(0)
+                .max(record.body.terms.funded.value());
+            let added = value.saturating_sub(record.body.terms.funded.value());
+            if restored.paid > record.body.maximum_payment.value().saturating_add(added) {
                 return Err(PayerError::Backup);
             }
             restored.record = Some(record);
@@ -654,6 +755,11 @@ impl Payer {
             return Err(PayerError::Backup);
         }
         let previous = reply.hash().map_err(|_| PayerError::Backup)?;
+        if let Some(count) = reply.body.get("notes").and_then(|value| value.as_u64())
+            && (1..=4).contains(&count)
+        {
+            self.service_notes = u8::try_from(count).map_err(|_| PayerError::Backup)?;
+        }
         if let Some(previous) = self.channel.pending_paid {
             match reply.body.get("step").and_then(|value| value.as_str()) {
                 Some("refused") => {
@@ -694,7 +800,7 @@ impl Payer {
             &prepared.pczt,
             prepared.amount,
             prepared.anchor_height,
-            false,
+            Signing::Payment,
             tree,
             services,
         )?;
@@ -718,6 +824,18 @@ impl Payer {
         services: Vec<tidvar_core::frost::Commitment>,
         tree: tidvar_chain::service::TreeState,
     ) -> Result<tidvar_core::transport::Authenticated, PayerError> {
+        self.prepare_renew_request(root, prepared, services, tree, None)
+    }
+    /// A cooperative close; with `next` (the next tab's address and id) the change funds that
+    /// tab in the same transaction.
+    pub fn prepare_renew_request(
+        &mut self,
+        root: &Root,
+        prepared: &tidvar_core::iou::Prepared,
+        services: Vec<tidvar_core::frost::Commitment>,
+        tree: tidvar_chain::service::TreeState,
+        next: Option<(&str, &str)>,
+    ) -> Result<tidvar_core::transport::Authenticated, PayerError> {
         if self.channel.pending.is_some() {
             return Err(PayerError::Pending);
         }
@@ -734,7 +852,7 @@ impl Payer {
             &prepared.pczt,
             prepared.amount,
             prepared.anchor_height,
-            true,
+            next.map_or(Signing::Close, |(address, _)| Signing::Renew(address)),
             tree,
             services,
         )?;
@@ -746,10 +864,13 @@ impl Payer {
             messages: signed.messages,
             shares: signed.shares,
         };
-        self.prepare_request(
-            root,
-            serde_json::json!({"step":"close_submit","payment":payment}),
-        )
+        let body = match next {
+            None => serde_json::json!({"step":"close_submit","payment":payment}),
+            Some((_, id)) => {
+                serde_json::json!({"step":"close_submit","payment":payment,"renew":id})
+            }
+        };
+        self.prepare_request(root, body)
     }
     pub fn commitment_unused(
         &self,
@@ -795,9 +916,28 @@ impl Payer {
                 .body
                 .terms
                 .funded;
+            let spent = pending
+                .message
+                .body
+                .get("payment")
+                .and_then(|payment| payment.get("messages"))
+                .and_then(|messages| messages.as_array())
+                .map(Vec::len)
+                .ok_or(PayerError::Backup)?;
+            let mut notes = self
+                .sync
+                .as_ref()
+                .ok_or(PayerError::Backup)?
+                .funding_notes()?;
+            if spent == 0 || spent > notes.len() {
+                return Err(PayerError::Backup);
+            }
+            notes.truncate(spent);
+            let value = tidvar_core::iou::notes_value(&notes)?;
             authorizer
                 .accept(
                     funded,
+                    value,
                     tidvar_core::params::Amount::try_from(amount)
                         .map_err(|_| PayerError::Backup)?,
                     now_ms,
@@ -850,13 +990,7 @@ impl Payer {
         hidden: bool,
         service_used: u64,
     ) -> Result<u64, PayerError> {
-        let funded = self
-            .record
-            .as_ref()
-            .ok_or(PayerError::Backup)?
-            .body
-            .terms
-            .funded;
+        let funded = tidvar_core::iou::notes_value(&self.spend_notes()?)?;
         let balance = self.authorization_balance(now_ms)?;
         if balance.paused || balance.closing {
             return Err(PayerError::Backup);

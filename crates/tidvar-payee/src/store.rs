@@ -368,6 +368,7 @@ impl Store {
         balance.validate(tab.record.body.terms.funded)?;
         balance.accept(
             tab.record.body.terms.funded,
+            payment.value,
             payment.request.amount,
             balance.observed(now_ms)?,
         )?;

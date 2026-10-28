@@ -17,6 +17,9 @@ pub struct Ledger {
     /// Zatoshi charged for chat answers (and other per-request products).
     #[serde(default)]
     chat_zat: u64,
+    /// Value of the top-up notes spent by the newest accepted IOU.
+    #[serde(default)]
+    topped: u64,
     active: Option<Active>,
     clock_ms: Option<u64>,
     paused: bool,
@@ -40,6 +43,7 @@ impl Default for Ledger {
             paid: Amount::ZERO,
             vpn_ms: 0,
             chat_zat: 0,
+            topped: 0,
             active: None,
             clock_ms: None,
             paused: false,
@@ -102,8 +106,17 @@ impl Ledger {
             cut_at_ms,
         })
     }
+    /// The tab's value: the funding amount plus the top-ups the newest accepted IOU spends.
+    pub fn value(&self, funded: Amount) -> Result<Amount, AmountError> {
+        Amount::try_from(
+            funded
+                .value()
+                .checked_add(self.topped)
+                .ok_or(AmountError::Range)?,
+        )
+    }
     pub fn validate(&self, funded: Amount) -> Result<(), AmountError> {
-        if self.paid > params::spendable(funded)?
+        if self.paid > params::spendable(self.value(funded)?)?
             || self.chat_zat > self.paid.value()
             || self.vpn_ms > self.vpn_cap_ms()?
             || (self.active.is_some() && (self.paused || self.closing))
@@ -156,13 +169,25 @@ impl Ledger {
         self.clock_ms = Some(now_ms);
         Ok(removed)
     }
-    pub fn accept(&mut self, funded: Amount, next: Amount, now_ms: u64) -> Result<(), AmountError> {
+    /// Accepts a payment of `next` from an IOU whose notes are worth `value` (at least `funded`).
+    pub fn accept(
+        &mut self,
+        funded: Amount,
+        value: Amount,
+        next: Amount,
+        now_ms: u64,
+    ) -> Result<(), AmountError> {
         if self.closing {
             return Err(AmountError::Used);
         }
-        params::check_payment(funded, self.paid, next)?;
+        let topped = value
+            .value()
+            .checked_sub(funded.value())
+            .ok_or(AmountError::Payment)?;
+        params::check_payment(value, self.paid, next)?;
         self.tick(now_ms)?;
         self.paid = next;
+        self.topped = topped;
         let used = self.balance()?.used;
         if let Some(active) = &mut self.active {
             active.paid_until_ms = params::paid_until_ms(now_ms, next, used)?;
@@ -224,10 +249,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn top_ups_raise_the_limit_by_their_value_only() -> Result<(), AmountError> {
+        let funded = Amount::try_from(50_000)?;
+        let topped = Amount::try_from(100_000)?;
+        let mut ledger = Ledger::default();
+        // Without the top-up the most that can be paid is 30,000.
+        assert!(
+            ledger
+                .clone()
+                .accept(funded, funded, Amount::try_from(30_001)?, 1_000)
+                .is_err()
+        );
+        ledger.accept(funded, topped, Amount::try_from(80_000)?, 1_000)?;
+        ledger.validate(funded)?;
+        assert_eq!(ledger.value(funded)?, topped);
+        assert!(
+            ledger
+                .clone()
+                .accept(funded, topped, Amount::try_from(80_001)?, 2_000)
+                .is_err()
+        );
+        // An IOU worth less than the tab's amount is never accepted.
+        assert!(
+            Ledger::default()
+                .accept(
+                    funded,
+                    Amount::try_from(49_999)?,
+                    Amount::try_from(4)?,
+                    1_000
+                )
+                .is_err()
+        );
+        // A saved ledger that claims more than its notes is refused.
+        let mut saved: serde_json::Value =
+            serde_json::to_value(&ledger).map_err(|_| AmountError::Range)?;
+        saved["topped"] = 0.into();
+        let restored: Ledger = serde_json::from_value(saved).map_err(|_| AmountError::Range)?;
+        assert!(restored.validate(funded).is_err());
+        Ok(())
+    }
+    #[test]
     fn chat_charges_need_prepaid_credit_and_shorten_vpn_time() -> Result<(), AmountError> {
         let funded = Amount::try_from(100_000)?;
         let mut ledger = Ledger::default();
-        ledger.accept(funded, Amount::try_from(1_100)?, 1_000)?;
+        ledger.accept(funded, funded, Amount::try_from(1_100)?, 1_000)?;
         ledger.resume(1_000)?;
         let before = ledger.balance()?.paid_until_ms.ok_or(AmountError::Time)?;
         ledger.charge(1_000, params::CHAT_PRICE)?;
@@ -260,7 +325,7 @@ mod tests {
         let funded = Amount::try_from(100_000)?;
         let mut ledger = Ledger::default();
         assert!(ledger.resume(start).is_err());
-        ledger.accept(funded, Amount::try_from(4)?, start)?;
+        ledger.accept(funded, funded, Amount::try_from(4)?, start)?;
         ledger.resume(start)?;
         let cut = ledger.balance()?.cut_at_ms.ok_or("Missing cutoff")?;
         assert_eq!(cut - start, 29_000);
@@ -280,7 +345,7 @@ mod tests {
         let start = now()?;
         let funded = Amount::try_from(100_000)?;
         let mut ledger = Ledger::default();
-        ledger.accept(funded, Amount::try_from(600)?, start)?;
+        ledger.accept(funded, funded, Amount::try_from(600)?, start)?;
         ledger.resume(start)?;
         ledger.pause(start + 1250)?;
         let bytes = serde_json::to_vec(&ledger)?;
@@ -297,7 +362,7 @@ mod tests {
         assert!(ledger.resume(start + 901_251).is_err());
         assert!(
             ledger
-                .accept(funded, Amount::try_from(601)?, start + 901_251)
+                .accept(funded, funded, Amount::try_from(601)?, start + 901_251)
                 .is_err()
         );
         Ok(())
@@ -308,15 +373,15 @@ mod tests {
         let start = now()?;
         let funded = Amount::try_from(100_000)?;
         let mut ledger = Ledger::default();
-        ledger.accept(funded, Amount::try_from(4)?, start)?;
+        ledger.accept(funded, funded, Amount::try_from(4)?, start)?;
         ledger.resume(start)?;
-        ledger.accept(funded, Amount::try_from(6)?, start + 10_000)?;
+        ledger.accept(funded, funded, Amount::try_from(6)?, start + 10_000)?;
         let balance = ledger.balance()?;
         assert_eq!(balance.used.value(), 2);
         assert_eq!(balance.cut_at_ms, Some(start + 39_000));
         assert!(
             ledger
-                .accept(funded, Amount::try_from(6)?, start + 11_000)
+                .accept(funded, funded, Amount::try_from(6)?, start + 11_000)
                 .is_err()
         );
         assert!(ledger.tick(start + 9999).is_err());
@@ -345,7 +410,7 @@ mod tests {
         let start = now()?;
         let funded = Amount::try_from(100_000)?;
         let mut ledger = Ledger::default();
-        ledger.accept(funded, Amount::try_from(10)?, start)?;
+        ledger.accept(funded, funded, Amount::try_from(10)?, start)?;
         ledger.resume(start)?;
         ledger.tick(start + 6000)?;
         ledger.recover();

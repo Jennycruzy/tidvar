@@ -3,13 +3,16 @@ import {configureWasm,loadWasm} from "../../packages/tidvar-web/src/wasm.js";
 import {parseBackup} from "../../packages/tidvar-web/src/storage.js";
 import {Tab} from "../../packages/tidvar-web/src/tab.js";
 configureWasm("/pkg/tidvar_payer.js");
-const opening = new Opening();
+let opening = new Opening();
 let tab: Tab | undefined;
+let nextOpening: Opening | undefined;
 const chain = (height: bigint, value: bigint) => host.postMessage({chain: {height: Number(height), value: Number(value)}});
 function current(): Tab {if (!tab) throw new Error("Open or recover a tab first."); return tab;}
 function meter(): unknown {
   const local = JSON.parse(opening.session.current().authorization_balance(BigInt(Date.now()))) as unknown;
-  return {local, service: current().serviceBalance() ?? null, signed: Number(opening.session.current().signed_amount())};
+  let received: unknown = null;
+  try {received = current().received();} catch {received = null;}
+  return {local, service: current().serviceBalance() ?? null, signed: Number(opening.session.current().signed_amount()), received};
 }
 const host = globalThis as unknown as {onmessage: ((event: MessageEvent) => void) | null; postMessage(message: unknown): void};
 let busy = false;
@@ -69,11 +72,26 @@ host.onmessage = async event => {
     else if (type === "close") result={reply:await current().close(chain),meter:meter()};
     else if (type === "close_status") result={reply:await current().closeStatus(),meter:meter()};
     else if (type === "meter") result = meter();
+    else if (type === "top_up") result = current().topUp(Number(value));
+    else if (type === "renew_protect") {nextOpening = new Opening(); result = await nextOpening.protect();}
+    else if (type === "renew") {
+      const next = nextOpening;
+      if (!next) throw new Error("Save the new tab's words first.");
+      const old = current();
+      const record = JSON.parse(opening.session.current().signed_record()) as {body: {terms: {return_address: string}}};
+      let opened: Awaited<ReturnType<Opening["open"]>> | undefined;
+      const reply = await old.renew(async funded => {
+        opened = await next.open({funded, lifetime: String(value) as Parameters<Opening["open"]>[0]["lifetime"], return_address: record.body.terms.return_address}, text => host.postMessage({progress: text}));
+        host.postMessage({renewing: opened.id});
+        return {id: opened.id, address: opened.funding.address};
+      }, chain);
+      result = {reply, next: opened ? {id: opened.id, backup: opened.backup} : null, meter: meter()};
+    }
     else throw new Error("This step is not available.");
     host.postMessage({id, result});
   } catch (error) {
     let snapshot: unknown;
     try {if(tab)snapshot=meter();} catch {}
-    host.postMessage({id:event.data.id,meter:snapshot,error:error instanceof Error ? error.message : "This step could not finish. Keep your backup and retry."});
+    host.postMessage({id:event.data.id,meter:snapshot,error:error instanceof Error ? error.message : typeof error === "string" ? error : "This step could not finish. Keep your backup and retry."});
   } finally {busy = false;}
 };

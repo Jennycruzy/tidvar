@@ -334,10 +334,52 @@ use tidvar_core::iou::Prepared;
 #[wasm_bindgen]
 impl BrowserPayer {
     pub fn prepare_transaction(&self, amount: u64, cooperative: bool) -> Result<String, JsValue> {
+        self.prepare_transaction_to(amount, cooperative, None)
+    }
+    /// A renew: the cooperative close whose change goes to the next tab's address.
+    pub fn prepare_renew_transaction(&self, amount: u64, to: &str) -> Result<String, JsValue> {
+        self.prepare_transaction_to(amount, true, Some(to))
+    }
+    pub fn renew_amount(&self, used: u64) -> Result<u64, JsValue> {
         let State::Ready(payer) = &self.state else {
             return Err(wrong_state());
         };
-        let checked = payer.transaction(amount, cooperative).map_err(error)?;
+        payer.renew_amount(used).map_err(error)
+    }
+    pub fn prepare_renew_request(
+        &mut self,
+        prepared: &str,
+        services: &str,
+        tree: &[u8],
+        to: &str,
+        next_id: &str,
+    ) -> Result<String, JsValue> {
+        let prepared: tidvar_core::iou::Prepared = parse(prepared)?;
+        let services = parse(services)?;
+        let tree = tidvar_chain::transport::unary(tree).map_err(error)?;
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        json(
+            &payer
+                .prepare_renew_request(&self.root, &prepared, services, tree, Some((to, next_id)))
+                .map_err(error)?,
+        )
+    }
+}
+impl BrowserPayer {
+    fn prepare_transaction_to(
+        &self,
+        amount: u64,
+        cooperative: bool,
+        to: Option<&str>,
+    ) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        let checked = payer
+            .transaction_to(amount, cooperative, to)
+            .map_err(error)?;
         let height = payer.sync().ok_or_else(wrong_state)?.height;
         json(&Prepared {
             pczt: checked
@@ -372,7 +414,11 @@ impl BrowserPayer {
                     &prepared.pczt,
                     prepared.amount,
                     prepared.anchor_height,
-                    prepared.cooperative,
+                    if prepared.cooperative {
+                        crate::engine::Signing::Close
+                    } else {
+                        crate::engine::Signing::Payment
+                    },
                     tree,
                     services,
                 )
@@ -473,12 +519,25 @@ impl BrowserPayer {
         let State::Ready(payer) = &self.state else {
             return Err(wrong_state());
         };
-        let notes = payer
-            .sync()
-            .ok_or_else(wrong_state)?
-            .funding_notes()
-            .map_err(error)?;
+        let notes = payer.spend_notes().map_err(error)?;
         u32::try_from(notes.len()).map_err(error)
+    }
+    /// The ZIP-321 request for one more payment to this tab (same address, amount chosen).
+    pub fn top_up_request(&self, amount_zat: u64) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        json(&payer.top_up_request(amount_zat).map_err(error)?)
+    }
+    /// Every note this tab has received (the funding payment and its top-ups), and their value.
+    pub fn received(&self) -> Result<String, JsValue> {
+        let State::Ready(payer) = &self.state else {
+            return Err(wrong_state());
+        };
+        let sync = payer.sync().ok_or_else(wrong_state)?;
+        json(
+            &serde_json::json!({"notes":sync.funding_notes().map_err(error)?.len(),"value":sync.value().map_err(error)?,"counted":payer.spend_notes().map_err(error)?.len()}),
+        )
     }
     pub fn payment_target(
         &mut self,

@@ -32,14 +32,10 @@ impl Store {
         transaction: &zcash_primitives::transaction::Transaction,
         amount: u64,
         fee: u64,
+        value: u64,
     ) -> Result<Closing, PayeeError> {
-        let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
-        let returned = tab
-            .record
-            .body
-            .terms
-            .funded
-            .value()
+        self.load(id)?.ok_or(PayeeError::Terms)?;
+        let returned = value
             .checked_sub(amount)
             .and_then(|value| value.checked_sub(fee))
             .ok_or(PayeeError::Terms)?;
@@ -205,6 +201,7 @@ impl Store {
         request: &Request,
         notes: &[FundingNote],
         context: TransactionContext,
+        to: Option<&str>,
         rng: &mut R,
     ) -> Result<Checked, PayeeError> {
         let tab = self.load(id)?.ok_or(PayeeError::Terms)?;
@@ -228,7 +225,8 @@ impl Store {
             return Err(PayeeError::Terms);
         }
         let pczt = pczt::Pczt::parse(&request.pczt).map_err(|_| PayeeError::Proof)?;
-        let mut checked = iou::check(pczt, &tab.record, notes, request.amount, context, rng)?;
+        let mut checked =
+            iou::check_to(pczt, &tab.record, notes, request.amount, context, to, rng)?;
         if checked.spends.len() != request.messages.len()
             || checked.spends.len() != request.shares.len()
         {

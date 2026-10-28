@@ -15,6 +15,8 @@ export class Tab {
   private refreshedAt = 0;
   private branchCheckedAt = 0;
   private balance?: Balance;
+  /** Notes the service last reported counting; a top-up it has seen makes this page sync now. */
+  private serviceNotes = 0;
   private prompt?: string;
   private answer: string | null = null;
   constructor(readonly opening: Opening, readonly id: string) {}
@@ -54,6 +56,7 @@ export class Tab {
     const reply=JSON.parse(payer.accept_reply(text,BigInt(Date.now()))) as Record<string,unknown>;
     await this.opening.session.save(this.id);
     if(reply.step==="refused")throw new Error(typeof reply.error==="string"?reply.error:"The service refused this payment. Keep your backup and retry.");
+    if(typeof reply.notes==="number")this.serviceNotes=reply.notes;
     if(reply.step==="nonces"){this.pool=reply.commitments as Commitment[];this.balance=reply.balance as Balance;}
     if(reply.step==="accepted")this.balance=(reply.receipt as {balance:Balance}).balance;
     if(typeof reply.step==="string" && (reply.step.startsWith("vpn_") || reply.step.startsWith("close_") || reply.step.startsWith("chat_") || reply.step.startsWith("charge")) && reply.balance)this.balance=reply.balance as Balance;
@@ -61,6 +64,14 @@ export class Tab {
   }
   async retry(): Promise<Record<string,unknown> | undefined> {return await this.deliver();}
   serviceBalance(): Balance | undefined {return this.balance;}
+  /** A payment request for more value on this tab: same address, counted after one block. */
+  topUp(amountZat: number): {address: string; amount: string; amount_zat: number; uri: string} {
+    return JSON.parse(this.opening.session.current().top_up_request(BigInt(amountZat))) as {address: string; amount: string; amount_zat: number; uri: string};
+  }
+  /** Notes this tab has received and how many the service has counted. */
+  received(): {notes: number; value: number; counted: number} {
+    return JSON.parse(this.opening.session.current().received()) as {notes: number; value: number; counted: number};
+  }
   async vpn(body: {step: "vpn_peer"; public_key: string} | {step: "vpn_pause"} | {step: "vpn_resume"}): Promise<Record<string,unknown>> {
     await this.deliver();
     this.opening.session.current().prepare_request(JSON.stringify(body));
@@ -89,11 +100,37 @@ export class Tab {
     const payer=this.opening.session.current(),wasm=await loadWasm();
     const prepared=JSON.parse(payer.prepare_transaction(BigInt(used),true)) as {anchor_height:number};
     const tree=await relay("GetTreeState",wasm.tree_request(BigInt(prepared.anchor_height)));
-    payer.prepare_close_request(JSON.stringify(prepared),JSON.stringify(reply.commitments),tree);
+    // The close spends the notes both sides have counted (the funding payment and any top-ups).
+    payer.prepare_close_request(JSON.stringify(prepared),JSON.stringify((reply.commitments as Commitment[]).slice(0,payer.funding_note_count())),tree);
     await this.opening.session.save(this.id);
     const closed=await this.deliver();
     if(!closed)throw new Error("The close is saved. Keep this page open and retry.");
     return closed;
+  }
+  /**
+   * Renews this tab: one transaction closes it and moves everything it returns into a new tab.
+   * `openNext` opens the next tab for exactly that amount and returns its id and address.
+   */
+  async renew(openNext:(funded:number)=>Promise<{id:string;address:string}>,progress:(height:bigint,value:bigint)=>void):Promise<Record<string,unknown>> {
+    let reply=await this.deliver();
+    if(reply?.step==="close_mined" || reply?.step==="close_submitted")return reply;
+    if(reply?.step!=="close_ready")reply=await this.closeRequest("close_start");
+    if(reply.step!=="close_ready")return reply;
+    const used=reply.used;
+    if(typeof used!=="number" || !Number.isSafeInteger(used) || used<0)throw new Error("The service returned an invalid closing amount.");
+    await this.opening.sync(progress);
+    await this.opening.session.save(this.id);
+    const payer=this.opening.session.current(),wasm=await loadWasm();
+    const count=payer.funding_note_count();
+    const funded=Number(payer.renew_amount(BigInt(used)));
+    const next=await openNext(funded);
+    const prepared=JSON.parse(payer.prepare_renew_transaction(BigInt(used),next.address)) as {anchor_height:number};
+    const tree=await relay("GetTreeState",wasm.tree_request(BigInt(prepared.anchor_height)));
+    payer.prepare_renew_request(JSON.stringify(prepared),JSON.stringify((reply.commitments as Commitment[]).slice(0,count)),tree,next.address,next.id);
+    await this.opening.session.save(this.id);
+    const renewed=await this.deliver();
+    if(!renewed)throw new Error("The renew is saved. Keep this page open and retry.");
+    return renewed;
   }
   async closeStatus():Promise<Record<string,unknown>>{
     await this.deliver();
@@ -114,7 +151,7 @@ export class Tab {
     const payer=this.opening.session.current(),wasm=await loadWasm();
     let height:bigint;
     try{height=payer.synced_height();}catch{height=0n;}
-    let refresh=height===0n || payer.funding_note_count()===0 || Date.now()-this.refreshedAt>=30*60*1000;
+    let refresh=height===0n || payer.funding_note_count()===0 || Date.now()-this.refreshedAt>=30*60*1000 || this.serviceNotes>this.received().notes;
     if(!hidden && !refresh){
       const latest=wasm.latest_height(await relay("GetLatestBlock",wasm.latest_request()));
       refresh=latest-height>=20n;

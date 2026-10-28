@@ -21,6 +21,11 @@ export interface Payer {
   prepare_iou_request(prepared: string, services: string, tree: Uint8Array): string;
   commitment_unused(commitment: string): boolean;
   funding_note_count(): number;
+  top_up_request(amount_zat: bigint): string;
+  renew_amount(used: bigint): bigint;
+  prepare_renew_transaction(amount: bigint, to: string): string;
+  prepare_renew_request(prepared: string, services: string, tree: Uint8Array, to: string, next_id: string): string;
+  received(): string;
   payment_target(now: bigint, hidden: boolean, serviceUsed: bigint): bigint;
   authorization_balance(now: bigint): string;
   backup_plaintext(): Uint8Array;

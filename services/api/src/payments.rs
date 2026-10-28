@@ -122,13 +122,31 @@ pub(crate) async fn scan(
             "We haven't seen your payment yet. It shows up after one block (about a minute).",
         ));
     }
-    if value != tab.record.body.terms.funded.value() || state.additional_notes > 0 {
+    // A wallet may split the funding payment into notes; anything beyond the tab's amount is a
+    // top-up. The tab counts at most four notes.
+    if value < tab.record.body.terms.funded.value() || state.additional_notes > 0 {
         return Err(Failure(
             StatusCode::CONFLICT,
             "The confirmed amount does not match the amount approved for this tab. Keep your backup.",
         ));
     }
     Ok(state)
+}
+/// The notes an IOU spends: the first `count` the service has counted, in chain order.
+pub(crate) fn counted(state: &SyncState, count: usize) -> Result<Vec<iou::FundingNote>, Failure> {
+    let mut notes = state.funding_notes().map_err(|_| Failure::unavailable())?;
+    if count == 0 || count > notes.len() {
+        return Err(Failure(
+            StatusCode::CONFLICT,
+            "The service has not counted that top-up yet. Retry in a minute.",
+        ));
+    }
+    notes.truncate(count);
+    Ok(notes)
+}
+/// How many notes the service counts for this tab; the payer spends no more than this.
+fn note_count(state: &SyncState) -> usize {
+    state.notes.iter().filter(|note| !note.spent).count()
 }
 async fn execute(app: App, request: Authenticated, iou_route: bool) -> Result<Response, Failure> {
     let cached = app
@@ -163,6 +181,7 @@ async fn execute(app: App, request: Authenticated, iou_route: bool) -> Result<Re
         .ok_or_else(Failure::bad)?;
     let mut client = app.chain.lock().await.clone();
     let state = scan(&app, &mut client, &tab).await?;
+    let notes = note_count(&state);
     let body = match action {
         Action::Nonces => {
             let app = app.clone();
@@ -173,11 +192,14 @@ async fn execute(app: App, request: Authenticated, iou_route: bool) -> Result<Re
                 if balance.closing {return Err(Failure(StatusCode::GONE,"This tab is closing. Keep its transaction and your backup."));}
                 let commitments=store.available_nonces(&id,&mut OsRng).map_err(failure)?;
                 let usage=store.usage(&id,now()?,app.bandwidth).map_err(failure)?;
-                Ok::<_,Failure>(serde_json::json!({"step":"nonces","commitments":commitments,"balance":balance,"height":state.height,"usage":usage}))
+                Ok::<_,Failure>(serde_json::json!({"step":"nonces","commitments":commitments,"balance":balance,"height":state.height,"usage":usage,"notes":notes}))
             }).await.map_err(|_|Failure::internal())??
         }
         Action::Iou { payment } => match accept(app.clone(), tab, state, client, payment).await {
-            Ok(body) => body,
+            Ok(mut body) => {
+                body["notes"] = notes.into();
+                body
+            }
             Err(error) if matches!(error.0, StatusCode::BAD_REQUEST | StatusCode::CONFLICT) => {
                 serde_json::json!({"step":"refused","error":error.1,"code":"IOU_REFUSED"})
             }
@@ -251,7 +273,9 @@ async fn accept(
                 .map_err(|_| Failure::internal())?
                 .balance(&id, now()?)
                 .map_err(failure)?;
-            params::check_payment(tab.record.body.terms.funded, balance.paid, payment.amount)
+            let notes = counted(&state, payment.messages.len())?;
+            let value = iou::notes_value(&notes).map_err(|_| Failure::bad())?;
+            params::check_payment(value, balance.paid, payment.amount)
                 .map_err(|_| Failure::bad())?;
             if balance.closing {
                 return Err(Failure::bad());
@@ -288,7 +312,7 @@ async fn accept(
                 let verified = tidvar_payee::payments::verify(
                     &tab,
                     payment,
-                    &state.funding_notes().map_err(|_| Failure::unavailable())?,
+                    &notes,
                     TransactionContext {
                         target,
                         kind: Kind::Payment,

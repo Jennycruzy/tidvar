@@ -91,11 +91,20 @@ the tab's message channel. S charges it from prepaid credit and records the repl
 so a retried request is never charged twice (`Store::charge_and_reply`). A chat answer the model can't produce
 is not charged.
 
+**Top-up** (`Payer::top_up_request`, `services/api/src/payments.rs`): P pays more into the same tab address
+from any wallet. The tab counts at most four notes; their sum `V` must be at least the tab's amount, and
+anything beyond it raises `M` by exactly that value. Each IOU spends the first `k` counted notes in chain
+order, where `k` is the number of signature shares it carries: P uses no more notes than S last reported
+counting, and S checks the IOU against exactly those `k` notes, so a top-up that one side has not seen yet
+never makes a payment fail. The fee is `C(k)`, and closes spend every note both sides have counted. A top-up
+neither side has counted yet stays at the tab address and goes back to P in the refund.
+
 ## 6. Ending a tab
 
 | Ending | Who acts | What is published | Where |
 |---|---|---|---|
 | Cooperative close | P and S together | a fresh transaction paying S `used` and returning the rest to P | `services/api/src/close.rs`, `crates/tidvar-payee/src/close.rs` |
+| Renew | P and S together | one cooperative close whose change output is the funding of P's next tab: P opens the next tab (new keys, new seal, new refund time) for exactly what the close returns, then signs the close to that tab's address; S signs only if the next tab is its own and its amount matches | `Tab.renew`, `Payer::prepare_renew_request`, `iou::check_to`, `services/api/src/close.rs` |
 | Forced close | S alone, any time, and automatically at `T_close` | S completes the newest IOU with its stored nonce, proves and broadcasts | `services/api/src/force.rs` `force_close`, `Store::sign_forced` |
 | Watchtower close | a separate process holding no keys | at `T_pack`, S finishes the newest IOU into a complete transaction and queues it; from `T_watch` the watchtower publishes it if the tab is still open | `force.rs` `pack`, `watch/src/main.rs` |
 | Refund | P alone, after `T_refund` | the browser opens the seal with round `R`, rebuilds S's key package from the released share (refused unless it matches S's verifying share), signs every spend with both shares and saves the signed transaction; `tidvar send-refund` proves and broadcasts it | `crates/tidvar-payer/src/engine.rs` `refund_transaction`, `crates/tidvar-core/src/iou.rs` `refund`, `crates/tidvar-cli` |

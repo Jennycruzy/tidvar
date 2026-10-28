@@ -3,7 +3,7 @@ use rand_core::OsRng;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tidvar_chain::sync::SyncState;
 use tidvar_core::{
-    iou::{Kind, TransactionContext},
+    iou::{self, Kind, TransactionContext},
     params,
 };
 use tidvar_payee::PayeeError;
@@ -27,7 +27,7 @@ async fn finish_newest(
     client: &mut tidvar_chain::native::Client,
     tab_id: [u8; 32],
     freeze: bool,
-) -> Result<(zcash_primitives::transaction::Transaction, u64, u64), Failure> {
+) -> Result<(zcash_primitives::transaction::Transaction, u64, u64, u64), Failure> {
     let (tab, request) = {
         let store = app.store.lock().map_err(|_| Failure::internal())?;
         let tab = store
@@ -52,7 +52,11 @@ async fn finish_newest(
         .ok()
         .and_then(|height| height.checked_add(1))
         .ok_or_else(Failure::bad)?;
-    let notes = state.funding_notes().map_err(|_| Failure::unavailable())?;
+    // The newest IOU spends the notes the service had counted when it was signed.
+    let notes = payments::counted(&state, request.messages.len())?;
+    let value = iou::notes_value(&notes)
+        .map_err(|_| Failure::bad())?
+        .value();
     let fee = params::close_fee(u8::try_from(notes.len()).map_err(|_| Failure::bad())?)
         .map_err(|_| Failure::bad())?
         .value();
@@ -78,7 +82,7 @@ async fn finish_newest(
             .map_err(failure)?;
         let proven = app.proofs.prove(checked, &mut OsRng).map_err(failure)?;
         let transaction = app.proofs.extract(proven, &mut OsRng).map_err(failure)?;
-        Ok((transaction, request.amount.value(), fee))
+        Ok((transaction, request.amount.value(), fee, value))
     })
     .await
     .map_err(|_| Failure::internal())?
@@ -96,12 +100,12 @@ pub async fn force_close(app: &App, tab_id: [u8; 32]) -> Result<serde_json::Valu
     if let Some(closing) = stored {
         return publish(app, &mut client, &tab_id, closing).await;
     }
-    let (transaction, amount, fee) = finish_newest(app, &mut client, tab_id, true).await?;
+    let (transaction, amount, fee, value) = finish_newest(app, &mut client, tab_id, true).await?;
     let closing = app
         .store
         .lock()
         .map_err(|_| Failure::internal())?
-        .save_close(&tab_id, &transaction, amount, fee)
+        .save_close(&tab_id, &transaction, amount, fee, value)
         .map_err(failure)?;
     publish(app, &mut client, &tab_id, closing).await
 }
@@ -109,7 +113,7 @@ pub async fn force_close(app: &App, tab_id: [u8; 32]) -> Result<serde_json::Valu
 pub async fn pack(app: &App, tab_id: [u8; 32]) -> Result<String, Failure> {
     let _permit = app.work.acquire().await.map_err(|_| Failure::internal())?;
     let mut client = app.chain.lock().await.clone();
-    let (transaction, amount, _) = finish_newest(app, &mut client, tab_id, false).await?;
+    let (transaction, amount, _, _) = finish_newest(app, &mut client, tab_id, false).await?;
     let (txid, raw, watch_ms, expiry) = app
         .store
         .lock()

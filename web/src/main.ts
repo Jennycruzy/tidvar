@@ -35,11 +35,17 @@ worker.onmessage = event => {
   if(event.data.observation){observe("worker",event.data.observation as Record<string,unknown>);return;}
   if(event.data.meter)showMeter(event.data.meter as Meter);
   if (event.data.progress) {progress.textContent = event.data.progress; return;}
+  if (event.data.renewing) {
+    const old=localStorage.getItem("tidvar-current-tab");
+    if(old)localStorage.setItem("tidvar-renew-next-"+old,String(event.data.renewing));
+    localStorage.setItem("tidvar-renewed-"+String(event.data.renewing),old ?? "yes");
+    return;
+  }
   if (event.data.chain) {
     const {height, value} = event.data.chain as {height: number; value: number};
     observe("chain",{height,value});
     if (value > 0) startVpn();
-    element("chain-status").textContent = value > 0 ? `Payment confirmed: ${decimal(BigInt(value))} ${unit}. Synced through block ${height}.` : `No payment confirmed yet. Synced through block ${height}.`;
+    element("chain-status").textContent = value > 0 ? `Payment confirmed: ${decimal(BigInt(value))} ${unit}. Synced through block ${height}.` : localStorage.getItem("tidvar-renewed-"+localStorage.getItem("tidvar-current-tab")) ? `Waiting for the renew transaction to be mined. Synced through block ${height}.` : `No payment confirmed yet. Synced through block ${height}.`;
     return;
   }
   const pending = waiting.get(event.data.id);if (!pending) return;
@@ -136,20 +142,34 @@ if (stored) {
     element<HTMLAnchorElement>("wallet").href = funding.uri;
     await toCanvas(element<HTMLCanvasElement>("qr"), funding.uri, {width:280,margin:2});
     element("setup").hidden=true;element("funding").hidden=false;
+    if(localStorage.getItem("tidvar-renewed-"+result.id)){
+      for(const id of ["qr","copy-address","copy-amount","wallet"])element(id).hidden=true;
+      element("chain-status").textContent="This tab is funded by the renew of your previous tab. No wallet payment is needed; it shows up after one block.";
+    }
     progress.textContent = "Your saved tab is recovered.";
-    if(closing){element("vpn").hidden=false;void closeTab();}else void poll();
+    if(closing && localStorage.getItem("tidvar-renewing-"+result.id)){
+      // A renew that stopped before it was signed: offer it again instead of closing.
+      element("vpn").hidden=false;element("renew-panel").hidden=false;
+      element("renew-status").textContent="Your renew did not finish. Protect a new tab and renew again, or close this tab to get the rest back.";
+    }else if(closing){element("vpn").hidden=false;void closeTab();}else void poll();
   }).catch(failure => {error.textContent=failure instanceof Error ? failure.message : "The saved tab could not be recovered.";});
 }
 window.addEventListener("pagehide", () => {if (backupUrl) URL.revokeObjectURL(backupUrl);});
 
 interface Balance {paid: number; used: number; running: boolean; paused: boolean; closing: boolean; paid_until_ms: number | null}
-interface Meter {local: Balance; service: Balance | null; signed: number}
+interface Meter {local: Balance; service: Balance | null; signed: number; received?: {notes: number; value: number; counted: number} | null}
 let paying = false;
 let loop: number | undefined;
 function showMeter(meter: Meter): void {
   const service = meter.service ?? meter.local;
   element("meter-paid").textContent = `${meter.signed} zat`;
   element("meter-used").textContent = `${service.used} zat`;
+  if (meter.received && meter.received.notes > 0) {
+    const tops = meter.received.notes - 1;
+    element("meter-value").textContent = `${decimal(BigInt(meter.received.value))} ${unit}` + (tops > 0 ? ` · funding + ${tops} top-up${tops > 1 ? "s" : ""}` + (meter.received.counted < meter.received.notes ? " (the service counts it within a minute)" : "") : "");
+  }
+  element("top-up").hidden = closing;
+  element("renew").hidden = closing;
   element("meter-until").textContent = closing ? (service.closing ? "Closing · billing stopped" : "Closing · no new payments") : service.paused ? "Paused · prepaid time kept" : service.paid_until_ms ? new Date(service.paid_until_ms).toLocaleTimeString() : "Waiting for the first payment";
   element("prepare-cutoff").hidden=closing;
   element("stop-payments").hidden=closing;
@@ -299,6 +319,60 @@ async function closeTab():Promise<void>{
   }
 }
 element<HTMLButtonElement>("close-tab").onclick=()=>void closeTab();
+element<HTMLButtonElement>("renew").onclick=()=>{element("renew-panel").hidden=!element("renew-panel").hidden;};
+element<HTMLButtonElement>("renew-protect").onclick=async()=>{
+  const button=element<HTMLButtonElement>("renew-protect"),status=element("renew-status");
+  button.disabled=true;
+  try{element("renew-phrase").textContent=String(await call("renew_protect"));element("renew-words").hidden=false;status.textContent="Save the new words before renewing.";}
+  catch(failure){status.textContent=failure instanceof Error?failure.message:"The new tab could not be protected.";button.disabled=false;}
+};
+element<HTMLButtonElement>("renew-submit").onclick=async()=>{
+  const status=element("renew-status"),button=element<HTMLButtonElement>("renew-submit");
+  if(!element<HTMLInputElement>("renew-saved").checked){status.textContent="Confirm that you saved the new tab's words.";return;}
+  button.disabled=true;closing=true;
+  if(loop)window.clearTimeout(loop);
+  const old=localStorage.getItem("tidvar-current-tab");
+  if(old){localStorage.setItem("tidvar-closing-"+old,"yes");localStorage.setItem("tidvar-renewing-"+old,"yes");}
+  status.textContent="Stopping paid time, opening the new tab and signing the renew.";
+  observe("renew_requested");
+  try{
+    const result=await call("renew",element<HTMLSelectElement>("renew-lifetime").value) as {reply:CloseResult;next:{id:string;backup:unknown}|null;meter:Meter};
+    showMeter(result.meter);
+    element("renew-phrase").textContent="";element("renew-words").hidden=true;
+    observe("renew_status",{step:result.reply.step,...result.reply.close});
+    if(result.reply.step==="close_retry"){status.textContent=result.reply.error ?? "The renew needs a refresh. Retry.";button.disabled=false;return;}
+    if(!result.next)throw new Error("The new tab was not opened.");
+    const url=URL.createObjectURL(new Blob([JSON.stringify(result.next.backup)],{type:"application/json"}));
+    const link=document.createElement("a");link.href=url;link.download="tidvar-backup-"+result.next.id.slice(0,6)+".json";link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    status.textContent="Renewed. Transaction "+(result.reply.close?.txid ?? "")+" closes this tab and funds the new one; the new tab's backup was downloaded. Opening the new tab.";
+    localStorage.setItem("tidvar-current-tab",result.next.id);
+    window.setTimeout(()=>location.assign("/tab"),3000);
+  }catch(failure){status.textContent=failure instanceof Error?failure.message:"The renew is saved. Retry to continue.";button.disabled=false;}
+};
+element<HTMLButtonElement>("top-up").onclick=()=>{element("top-up-panel").hidden=!element("top-up-panel").hidden;};
+let topUpRequest: {address: string; amount: string; uri: string} | undefined;
+element<HTMLButtonElement>("top-up-show").onclick=async()=>{
+  const status=element("top-up-status");
+  try{
+    const text=element<HTMLInputElement>("top-up-amount").value.trim();
+    if(!/^\d+(\.\d{1,8})?$/.test(text))throw new Error(`Enter a ${unit} amount with at most eight decimal places.`);
+    const [whole, fraction = ""] = text.split(".");
+    const zat=Number(BigInt(whole)*100000000n+BigInt(fraction.padEnd(8,"0")));
+    topUpRequest=await call("top_up",zat) as {address: string; amount: string; uri: string};
+    element("top-up-address").textContent=topUpRequest.address;
+    element("top-up-pay").textContent=topUpRequest.amount;
+    element<HTMLAnchorElement>("top-up-wallet").href=topUpRequest.uri;
+    await toCanvas(element<HTMLCanvasElement>("top-up-qr"),topUpRequest.uri,{width:280,margin:2});
+    element("top-up-request").hidden=false;
+    status.textContent="Pay this from your wallet. Keep this page open; the tab value updates after one block.";
+    observe("top_up_requested",{amount:zat});
+  }catch(failure){status.textContent=failure instanceof Error?failure.message:"The top-up request could not be made.";}
+};
+element<HTMLButtonElement>("top-up-copy").onclick=async()=>{
+  if(!topUpRequest)return;
+  try{await navigator.clipboard.writeText(topUpRequest.address);element("top-up-status").textContent="Address copied.";}catch{element("top-up-status").textContent="Copy the address by hand.";}
+};
 element<HTMLButtonElement>("paid-call").onclick=async()=>{
   const button=element<HTMLButtonElement>("paid-call"),status=element("paid-status");
   button.disabled=true;status.textContent="Paying 2,000 zat from this tab.";

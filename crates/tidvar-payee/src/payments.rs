@@ -10,6 +10,7 @@ pub struct VerifiedIou {
     pub(crate) request: Request,
     pub(crate) hash: [u8; 32],
     pub(crate) witness: [u8; 32],
+    pub(crate) value: tidvar_core::params::Amount,
 }
 pub fn verify<R: RngCore + CryptoRng>(
     tab: &Accepted,
@@ -53,5 +54,6 @@ pub fn verify<R: RngCore + CryptoRng>(
         request,
         hash,
         witness,
+        value: iou::notes_value(notes)?,
     })
 }

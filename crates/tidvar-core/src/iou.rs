@@ -78,16 +78,36 @@ fn viewing(record: &SignedRecord) -> Result<FullViewingKey, IouError> {
         .map_err(|_| IouError::Transaction)?;
     FullViewingKey::from_bytes(&bytes).ok_or(IouError::Transaction)
 }
-fn fee(record: &SignedRecord, notes: &[FundingNote], amount: Amount) -> Result<Amount, IouError> {
+/// The value a transaction spends: the funding note plus any top-up notes it includes.
+pub fn notes_value(notes: &[FundingNote]) -> Result<Amount, IouError> {
     let value = notes
         .iter()
         .try_fold(0u64, |sum, n| sum.checked_add(n.note.value().inner()))
         .ok_or(IouError::Amount)?;
-    if value != record.body.terms.funded.value() || amount > record.body.maximum_payment {
+    Amount::try_from(value).map_err(|_| IouError::Amount)
+}
+/// The fee and the value spent. Top-ups raise the most that can be paid by exactly their value.
+fn fee(
+    record: &SignedRecord,
+    notes: &[FundingNote],
+    amount: Amount,
+) -> Result<(Amount, u64), IouError> {
+    let value = notes_value(notes)?.value();
+    let added = value
+        .checked_sub(record.body.terms.funded.value())
+        .ok_or(IouError::Amount)?;
+    let maximum = record
+        .body
+        .maximum_payment
+        .value()
+        .checked_add(added)
+        .ok_or(IouError::Amount)?;
+    if notes.is_empty() || amount.value() > maximum {
         return Err(IouError::Amount);
     }
-    params::close_fee(u8::try_from(notes.len()).map_err(|_| IouError::Amount)?)
-        .map_err(|_| IouError::Amount)
+    let cost = params::close_fee(u8::try_from(notes.len()).map_err(|_| IouError::Amount)?)
+        .map_err(|_| IouError::Amount)?;
+    Ok((cost, value))
 }
 fn expiry(record: &SignedRecord, target: u32, kind: Kind) -> Result<u32, IouError> {
     let branch = record
@@ -115,8 +135,36 @@ pub fn build<R: RngCore + CryptoRng>(
     kind: Kind,
     rng: &mut R,
 ) -> Result<Checked, IouError> {
+    build_to(record, notes, amount, target, kind, None, rng)
+}
+/// The payer's output goes to the record's return address, or, for a renew, to the address
+/// of the payer's next tab (cooperative closes only).
+fn payer_receiver(
+    record: &SignedRecord,
+    kind: Kind,
+    to: Option<&str>,
+) -> Result<orchard::Address, IouError> {
+    if to.is_some() && kind != Kind::Cooperative {
+        return Err(IouError::Transaction);
+    }
+    record::receiver(
+        to.unwrap_or(&record.body.terms.return_address),
+        record.body.offer.network,
+    )
+    .map_err(|_| IouError::Transaction)
+}
+/// Builds a payment or close; `to` renews the tab into the payer's next tab.
+pub fn build_to<R: RngCore + CryptoRng>(
+    record: &SignedRecord,
+    notes: &[FundingNote],
+    amount: Amount,
+    target: u32,
+    kind: Kind,
+    to: Option<&str>,
+    rng: &mut R,
+) -> Result<Checked, IouError> {
     let fvk = viewing(record)?;
-    let cost = fee(record, notes, amount)?;
+    let (cost, value) = fee(record, notes, amount)?;
     if kind == Kind::Payment && amount.value() == 0 {
         return Err(IouError::Amount);
     }
@@ -145,8 +193,7 @@ pub fn build<R: RngCore + CryptoRng>(
     }
     let service = record::receiver(&record.body.offer.address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
-    let payer = record::receiver(&record.body.terms.return_address, record.body.offer.network)
-        .map_err(|_| IouError::Transaction)?;
+    let payer = payer_receiver(record, kind, to)?;
     if kind == Kind::Payment || amount.value() > 0 {
         builder
             .add_ironwood_output::<std::convert::Infallible>(
@@ -157,11 +204,7 @@ pub fn build<R: RngCore + CryptoRng>(
             )
             .map_err(|_| IouError::Transaction)?;
     }
-    let returned = record
-        .body
-        .terms
-        .funded
-        .value()
+    let returned = value
         .checked_sub(amount.value())
         .and_then(|n| n.checked_sub(cost.value()))
         .ok_or(IouError::Amount)?;
@@ -188,7 +231,7 @@ pub fn build<R: RngCore + CryptoRng>(
     let pczt = IoFinalizer::new(pczt)
         .finalize_io(Random(rng))
         .map_err(|_| IouError::Transaction)?;
-    check(
+    check_to(
         pczt,
         record,
         notes,
@@ -198,6 +241,7 @@ pub fn build<R: RngCore + CryptoRng>(
             kind,
             anchor: anchor.to_bytes(),
         },
+        to,
         rng,
     )
 }
@@ -233,11 +277,23 @@ pub struct TransactionContext {
 }
 
 pub fn check(
+    pczt: Pczt,
+    record: &SignedRecord,
+    notes: &[FundingNote],
+    amount: Amount,
+    context: TransactionContext,
+    rng: &mut (impl RngCore + CryptoRng),
+) -> Result<Checked, IouError> {
+    check_to(pczt, record, notes, amount, context, None, rng)
+}
+/// Checks a payment or close; `to` is the next tab's address for a renew.
+pub fn check_to(
     mut pczt: Pczt,
     record: &SignedRecord,
     notes: &[FundingNote],
     amount: Amount,
     context: TransactionContext,
+    to: Option<&str>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<Checked, IouError> {
     let TransactionContext {
@@ -246,7 +302,7 @@ pub fn check(
         anchor,
     } = context;
     let fvk = viewing(record)?;
-    let cost = fee(record, notes, amount)?;
+    let (cost, value) = fee(record, notes, amount)?;
     if kind == Kind::Payment && amount.value() == 0 {
         return Err(IouError::Amount);
     }
@@ -275,13 +331,8 @@ pub fn check(
     }
     let service = record::receiver(&record.body.offer.address, record.body.offer.network)
         .map_err(|_| IouError::Transaction)?;
-    let payer = record::receiver(&record.body.terms.return_address, record.body.offer.network)
-        .map_err(|_| IouError::Transaction)?;
-    let returned = record
-        .body
-        .terms
-        .funded
-        .value()
+    let payer = payer_receiver(record, kind, to)?;
+    let returned = value
         .checked_sub(amount.value())
         .and_then(|n| n.checked_sub(cost.value()))
         .ok_or(IouError::Amount)?;

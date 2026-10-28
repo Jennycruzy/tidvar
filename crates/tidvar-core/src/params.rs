@@ -68,6 +68,9 @@ pub struct Settlement {
     pub fee: Amount,
 }
 
+/// The smallest top-up a tab takes (0.0001), so a note never costs more in fees than it adds.
+pub const MINIMUM_TOP_UP: u64 = 10_000;
+
 pub fn close_fee(note_count: u8) -> Result<Amount, AmountError> {
     if !(1..=MAXIMUM_NOTES).contains(&note_count) {
         return Err(AmountError::Notes);

@@ -22,7 +22,12 @@ enum Action {
     #[serde(rename = "close_start")]
     Start,
     #[serde(rename = "close_submit")]
-    Submit { payment: iou::Request },
+    Submit {
+        payment: iou::Request,
+        /// Renew: the payer's next tab (opened with this service) receives the change.
+        #[serde(default)]
+        renew: Option<String>,
+    },
     #[serde(rename = "close_status")]
     Status,
 }
@@ -152,9 +157,9 @@ pub async fn handle(
                     .map_err(|_| Failure::internal())?
                     .issue_nonces(&tab_id, notes.len(), None, &mut OsRng)
                     .map_err(failure)?;
-                serde_json::json!({"step":"close_ready","used":balance.used,"balance":balance,"commitments":commitments})
+                serde_json::json!({"step":"close_ready","used":balance.used,"balance":balance,"commitments":commitments,"notes":notes.len()})
             }
-            Action::Submit { payment } => {
+            Action::Submit { payment, renew } => {
                 let tab = app
                     .store
                     .lock()
@@ -181,10 +186,42 @@ pub async fn handle(
                     .ok()
                     .and_then(|height| height.checked_add(1))
                     .ok_or_else(Failure::bad)?;
-                let notes = state.funding_notes().map_err(|_| Failure::unavailable())?;
+                let notes = payments::counted(&state, payment.messages.len())?;
+                let value = iou::notes_value(&notes).map_err(|_| Failure::bad())?.value();
                 let fee = params::close_fee(u8::try_from(notes.len()).map_err(|_| Failure::bad())?)
                     .map_err(|_| Failure::bad())?
                     .value();
+                let to = match renew {
+                    None => None,
+                    Some(next) => {
+                        let next_id: [u8; 32] = hex::decode(&next)
+                            .ok()
+                            .and_then(|bytes| bytes.try_into().ok())
+                            .ok_or_else(Failure::bad)?;
+                        let next_tab = app
+                            .store
+                            .lock()
+                            .map_err(|_| Failure::internal())?
+                            .load(&next_id)
+                            .map_err(failure)?
+                            .ok_or_else(Failure::bad)?;
+                        let returned = value
+                            .checked_sub(payment.amount.value())
+                            .and_then(|rest| rest.checked_sub(fee))
+                            .ok_or_else(Failure::bad)?;
+                        if next_id == tab_id
+                            || next_tab.record.body.offer.address != tab.record.body.offer.address
+                            || next_tab.record.body.offer.network != tab.record.body.offer.network
+                            || next_tab.record.body.terms.funded.value() != returned
+                        {
+                            return Err(Failure(
+                                StatusCode::CONFLICT,
+                                "The next tab does not match what this tab returns. Nothing was signed.",
+                            ));
+                        }
+                        Some(next_tab.keys.public.address.clone())
+                    }
+                };
                 let worker = app.clone();
                 let closing = tokio::task::spawn_blocking(move || {
                     let app = worker;
@@ -201,6 +238,7 @@ pub async fn handle(
                                 kind: Kind::Cooperative,
                                 anchor,
                             },
+                            to.as_deref(),
                             &mut OsRng,
                         )
                         .map_err(failure)?;
@@ -209,7 +247,7 @@ pub async fn handle(
                     app.store
                         .lock()
                         .map_err(|_| Failure::internal())?
-                        .save_close(&tab_id, &transaction, payment.amount.value(), fee)
+                        .save_close(&tab_id, &transaction, payment.amount.value(), fee, value)
                         .map_err(failure)
                 })
                 .await
