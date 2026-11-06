@@ -1,0 +1,17 @@
+{
+  "name": "05-vpn-chat-and-paid-api-on-nu7",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "411e364be1683ed460ff5a2ce41c6a19fc568367eb3b5c87c5c4cb97f516f6fd",
+      "height": 3544332
+    },
+    {
+      "role": "close",
+      "txid": "727f878deed9d0dffa79666366ed548702b50cc28f67ebc99cdb32808bd57c48",
+      "height": 3544338
+    }
+  ]
+}
