@@ -1,0 +1,17 @@
+{
+  "name": "19-judge-path-with-the-free-faucet",
+  "ending": "cooperative",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "e2d82b1710f40938941bb43def91a3a6fb604e72cee1b2cd0cb6960e3b1ef9f8",
+      "height": 4588154
+    },
+    {
+      "role": "close",
+      "txid": "d0bee75050b1fb1563d80b459e03b6fd62a2d402857da0870997b9b7758a271c",
+      "height": 4588158
+    }
+  ]
+}

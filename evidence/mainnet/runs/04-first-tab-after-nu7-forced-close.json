@@ -1,0 +1,17 @@
+{
+  "name": "04-first-tab-after-nu7-forced-close",
+  "ending": "forced",
+  "fees_zat": 10000,
+  "transactions": [
+    {
+      "role": "funding",
+      "txid": "a1b5cd4fb7fc51f2503daf3e75afbf4afddbc1d3fe2815ed06a2cf2964cd2d47",
+      "height": 3544036
+    },
+    {
+      "role": "forced",
+      "txid": "3f7eaec9000245cfa8d54fb54a19442f87669f1db934d8a6e769b6d7c34719e6",
+      "height": 3544101
+    }
+  ]
+}

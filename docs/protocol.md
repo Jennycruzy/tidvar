@@ -22,7 +22,7 @@ Fixed when the tab opens, inside the tab record P and S both sign (`crates/tidva
 | Deadlines | `T_refund = T_open + L`; `T_pack = T_refund − min(18 h, 7L/8)`; `T_close = T_refund − min(6 h, L/2)`; `T_watch = T_refund − min(3 h, L/4)`; always `T_open < T_pack < T_close < T_watch < T_refund`, so the watchtower publishes only if the service has not closed by its own deadline | `params.rs` `Deadlines` |
 | Refund round `R` | the drand quicknet round at `T_refund` | `tidvar-seal` `round_at` |
 | IOU expiry | `h_open + ceil(L / 20 s)` blocks, so a payment transaction outlives `T_close` on every network | `params.rs` `iou_expiry` |
-| Network | mainnet or testnet, in the offer; transactions use the consensus branch of their target height (Ironwood: NU6.3 on mainnet, NU7 on testnet) and the network's coin type | `record.rs` `Network` |
+| Network | mainnet or testnet, in the offer; transactions use the consensus branch of their target height (Ironwood: on mainnet NU6.3, then NU7 from block 3,543,405; NU7 on testnet) and the network's coin type | `record.rs` `Network` |
 
 ## 2. Keys: a 2-of-2 lock without a dealer
 

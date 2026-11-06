@@ -8,6 +8,8 @@ b07e5fa6608d1e7a6c69f833e6f64f7b4942817e43838f3d1417a3931bda2a1e  mainnet/privac
 7fc09c7cb449a37ddee3d0cbeac97d6fc2eade468dc37fc586a3c3c7b004ff17  mainnet/runs/02-phone-vpn-chat-close.md
 13609af292af2819754f6d0a5f284239714201e10a2ad4a7fb51f50536f7e131  mainnet/runs/03-agent-in-an-mcp-client-pays-an-api.json
 351e94c1ae6d117bd8a6f8ddf1118d000ce68135bdfe7f6c1279eeb1a69d4a53  mainnet/runs/03-agent-in-an-mcp-client-pays-an-api.md
+0ae5a9bd3028a8e4e6519a107e04110298aca62e13713e3968d71705d9a460fb  mainnet/runs/04-first-tab-after-nu7-forced-close.json
+d6c1df89cfa3c988910ab1bb091eff95909c51b2a8f10bd601b01b0cdf66c9b9  mainnet/runs/04-first-tab-after-nu7-forced-close.md
 2d6b42f374c1634fd073159f3fb2a6814dcf1c8bfbbf32e1e416b788881b0730  testnet/attacks/20-sealed-share-corruption.json
 8159daa7399da7ff40655d4147a3978378bab718e6951eb84a5b3b39e44e90a4  testnet/attacks/20-sealed-share-corruption.md
 752e9c11dd16afa3eac2d37fa47e432b36e304bcaa489f9280dbc7a949200636  testnet/attacks/21-older-iou-close.json
@@ -72,3 +74,5 @@ e65c343d27825e74e3dfbddad9fcfec69b6f589be2b298875c39937caec1877d  testnet/runs/1
 8770f365a97519fa902d079222dede26791bed4c60729242be94d24a3c3241b2  testnet/runs/17-agent-pays-an-openai-api-over-x402.md
 5b7df37eaabc2d7215a40b40600946274870480124e1f80d2cf99a89b8dc99c3  testnet/runs/18-vpn-kept-paid-eight-hours-ahead.json
 b58ef714256af4e93b960cb28e9add9bb14873e7a9589d81cc44c3db8366d4c1  testnet/runs/18-vpn-kept-paid-eight-hours-ahead.md
+ac4760264c9f97cd63cd58c986ee6cb0abfe5edcaa782188fccc62e9d63808a5  testnet/runs/19-judge-path-with-the-free-faucet.json
+5939b3e2dae31ba68570659f7f8b1e56fa7739cbc19df1af01fb0eb643f7ca4c  testnet/runs/19-judge-path-with-the-free-faucet.md

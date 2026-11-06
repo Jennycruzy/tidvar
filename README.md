@@ -27,8 +27,13 @@ three uses: a VPN paid by the second, any HTTP API paid per request, and AI agen
 
 > **Judges, start here (3 minutes).** Watch the [2-minute demo](https://youtu.be/ckcJrI-__zQ). Then open the [mainnet app](https://tidvar.site)
 > and scroll the landing page. Then press **Check it yourself** in the header: it re-fetches every recorded
-> transaction from a public Zcash server and recomputes its id in your browser, no keys needed. Want to pay?
-> Use the **Testnet** switch in the header and a faucet; everything works the same with free TAZ.
+> transaction from a public Zcash server and recomputes its id in your browser, no keys needed.
+>
+> **Try a tab yourself, free and without a wallet (about 4 minutes).** Switch the header to **Testnet**, press
+> **Open a tab**, then **No wallet? Use our testnet address**, **Protect this tab** (tick that you saved the
+> words) and **Open this tab**. On the funding card press **Fund it free (testnet coins)**: the tab is streaming
+> about a minute later. Ask Tidvar Chat a question, watch the meter count, then press **Close tab and return
+> unused funds**: one transaction pays the service and returns the rest.
 
 | Landing | Open a tab | Backup words | Fund it from any wallet |
 |---|---|---|---|
@@ -67,15 +72,19 @@ Every run is a real transaction on the public chain, listed in `evidence/` and r
 
 | Run | What happened | Transactions |
 |---|---|---|
+| 04 | **The first tab after NU7.** Funded from Zingo right after mainnet's NU7 upgrade; both transactions are version 6 on the NU7 branch. The payer's page missed the confirmed payment until a reload, after a reorg had replaced a block it held, so the tab reached its closing time and the service closed it alone with the newest signed amount: **600 zat** to the service, **39,400 zat** returned. Saved chain views on the page and in the service now rebuild themselves after a reorg. | funding `a1b5cd4f…2d47` (block 3,544,036) · forced close `3f7eaec9…19e6` (block 3,544,101) |
 | 03 | **An AI agent paid an API on its own.** A general-purpose AI assistant, with `tidvar-agent` as its MCP tool, paid the live OpenAI-compatible model API at `tidvar.site/llm` twice (1,000 zat each) from a tab funded once with 0.0006 ZEC. With a 500 zat per-request cap, the next call was refused before paying: "This route asks 1000 zat, above the 500 zat limit for one request." The close paid exactly **2,000 zat** and returned **48,000 zat**. | [funding](https://blockchair.com/zcash/transaction/7c10e79fd5b83cdff8cb2e3b6e6d8113f88ed293f9a42c5122b97d7469c4cfee) · [close](https://blockchair.com/zcash/transaction/b3cf35ad83700837bbc71373aabbab0a634f294f6c4b34a20753479365cd4aee) (block 3,533,862) |
 | 02 | An Android phone opened a 0.0005 ZEC tab and paid it from Zingo. It used the VPN for 12 minutes, kept paid 8 hours ahead, paused and resumed it, and asked Tidvar Chat one question. The close paid the service exactly **1,120 zat** (1,000 for the answer, 120 for VPN time) and returned **38,880 zat** to the payer's Zodl wallet. | [funding](https://blockchair.com/zcash/transaction/a4ec513db55853ba0b895ca7254238f0efc6cbd0994a9123b4e6fc4139f3854b) · [close](https://blockchair.com/zcash/transaction/ec29f3018a7b1e9e2bc73651b15e8bece5ddff032ea7ed8a56929e0aea4a90b7) (block 3,533,841) |
 | 01 | A phone tab with the VPN connected; the watchtower, a separate process holding no keys, published the tab's close on its own and returned 39,993 zat. | [funding](https://blockchair.com/zcash/transaction/c00483ad876a3103cbb1b29e41f8570c0c187c073b4f1179fd51fcdc6a2ea75f) · [close](https://blockchair.com/zcash/transaction/ffb745da6f1e17ca60004783093d999ca3f9c71e974ada728a7c4c71fe24038f) (block 3,533,748) |
 
-**Testnet: 18 tabs, 37 transactions**, every way a tab can end:
+Explorers that had not indexed blocks after NU7 cannot show run 04 yet; the check page and `tidvar verify`
+fetch its transactions straight from a public Zcash server.
+
+**Testnet: 19 tabs, 39 transactions**, every way a tab can end:
 
 | Ending | Runs | What happened |
 |---|---|---|
-| Cooperative close | 13 | VPN on an Android phone, desktop Chrome and Firefox; chat; a paid API; an agent paying an OpenAI-compatible API over x402; a VPN kept paid 8 hours ahead |
+| Cooperative close | 14 | VPN on an Android phone, desktop Chrome and Firefox; chat; a paid API; an agent paying an OpenAI-compatible API over x402; a VPN kept paid 8 hours ahead; the judge path with the free faucet, four minutes from page to close |
 | Forced close | 1 | The payer left; at its closing deadline the service closed alone with the newest signed amount |
 | Refund | 2 | The service never answered; after the refund time the browser signed the refund alone |
 | Watchtower | 1 | The service was stopped; the watchtower published its close |
@@ -200,8 +209,11 @@ In the browser: `await tab.fetchPaid(url, progress, {method, body}, maxPrice)`. 
 - **The refund is a time seal, not a script.** Zcash has no shielded time locks, so the service's share is
   encrypted to a drand round (tlock) with a cut-and-choose check, and your device rebuilds the full key
   after that round.
-- **Two network upgrades at once.** Mainnet runs NU6.3 and testnet already runs NU7; every transaction uses
-  the consensus branch of its target height, and IOUs switch automatically when NU7 activates.
+- **Through a network upgrade.** Mainnet moved from NU6.3 to NU7 at block 3,543,405 and testnet runs NU7;
+  every transaction uses the consensus branch of its target height, so mainnet runs 01 to 03 (NU6.3) and
+  04 (NU7) came from the same code.
+- **Reorgs heal themselves.** A saved view of the chain that stops linking to new blocks (a block it held was
+  replaced) is rebuilt from the tab's opening block, on your device and in the service.
 - **The device is the wallet.** Compact blocks are decrypted on your device through our relay; keys, IOUs
   and backups never leave it unencrypted.
 - **Exactly once.** Each request is saved before it is sent and the service keeps its exact reply, so a retry
