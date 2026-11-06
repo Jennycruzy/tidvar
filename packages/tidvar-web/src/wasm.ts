@@ -32,6 +32,7 @@ export interface Payer {
   backup_plaintext(): Uint8Array;
   start_sync(reply: Uint8Array): void;
   apply_blocks(reply: Uint8Array): void;
+  rebuild_sync(reply: Uint8Array): void;
   synced_height(): bigint;
   verify_tip(reply: Uint8Array): bigint;
   free(): void;

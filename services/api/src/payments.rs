@@ -45,6 +45,56 @@ fn failure(error: PayeeError) -> Failure {
         _ => Failure::bad(),
     }
 }
+/// Why a funding view could not reach the chain tip.
+enum Behind {
+    /// The Zcash server did not answer; try again later.
+    Unavailable,
+    /// The saved view no longer links to the chain: a block it holds was replaced.
+    Diverged,
+}
+/// A new funding view starting just before the tab's opening block.
+async fn fresh(client: &mut Client, tab: &Accepted) -> Result<SyncState, Failure> {
+    let start = u64::from(tab.record.body.terms.open_height)
+        .checked_sub(1)
+        .ok_or_else(Failure::bad)?;
+    SyncState::new(
+        &tab.keys.public.viewing_key,
+        client
+            .tree(start)
+            .await
+            .map_err(|_| Failure::unavailable())?,
+    )
+    .map_err(|_| Failure::unavailable())
+}
+/// Applies every block up to the tip and checks the result against the server's tree.
+async fn extend(client: &mut Client, mut state: SyncState) -> Result<SyncState, Behind> {
+    let tip = client
+        .latest()
+        .await
+        .map_err(|_| Behind::Unavailable)?
+        .height;
+    if state.height > tip {
+        return Err(Behind::Unavailable);
+    }
+    while state.height < tip {
+        let start = state.height + 1;
+        for block in client
+            .blocks(start, (start + 127).min(tip))
+            .await
+            .map_err(|_| Behind::Unavailable)?
+        {
+            state.apply(block).map_err(|_| Behind::Diverged)?;
+        }
+    }
+    let tree = client
+        .tree(state.height)
+        .await
+        .map_err(|_| Behind::Unavailable)?;
+    state.verify_tip(&tree).map_err(|_| Behind::Diverged)?;
+    Ok(state)
+}
+/// Brings a tab's funding view up to the chain tip. A saved view whose blocks were replaced
+/// by a reorg is dropped and rebuilt from the tab's opening block.
 pub(crate) async fn scan(
     app: &App,
     client: &mut Client,
@@ -57,51 +107,32 @@ pub(crate) async fn scan(
         .map_err(|_| Failure::internal())?
         .funding_snapshot(&id)
         .map_err(failure)?;
-    let mut state = if let Some(snapshot) = snapshot {
-        SyncState::restore(serde_json::from_slice(&snapshot).map_err(|_| Failure::internal())?)
-            .map_err(|_| Failure::internal())?
-    } else {
-        let start = u64::from(tab.record.body.terms.open_height)
-            .checked_sub(1)
-            .ok_or_else(Failure::bad)?;
-        SyncState::new(
-            &tab.keys.public.viewing_key,
-            client
-                .tree(start)
-                .await
-                .map_err(|_| Failure::unavailable())?,
-        )
-        .map_err(|_| Failure::unavailable())?
+    let saved = match snapshot {
+        Some(snapshot) => Some(
+            SyncState::restore(serde_json::from_slice(&snapshot).map_err(|_| Failure::internal())?)
+                .map_err(|_| Failure::internal())?,
+        ),
+        None => None,
     };
-    if state.viewing_key().to_bytes().as_slice() != tab.keys.public.viewing_key {
+    let rebuilt = saved.is_none();
+    let start = match saved {
+        Some(state) => state,
+        None => fresh(client, tab).await?,
+    };
+    if start.viewing_key().to_bytes().as_slice() != tab.keys.public.viewing_key {
         return Err(Failure::internal());
     }
-    let tip = client
-        .latest()
-        .await
-        .map_err(|_| Failure::unavailable())?
-        .height;
-    if state.height > tip {
-        return Err(Failure::unavailable());
-    }
-    while state.height < tip {
-        let start = state.height + 1;
-        for block in client
-            .blocks(start, (start + 127).min(tip))
-            .await
-            .map_err(|_| Failure::unavailable())?
-        {
-            state.apply(block).map_err(|_| Failure::unavailable())?;
-        }
-    }
-    state
-        .verify_tip(
-            &client
-                .tree(state.height)
+    let state = match extend(client, start).await {
+        Ok(state) => state,
+        Err(Behind::Diverged) if !rebuilt => {
+            eprintln!("A saved funding view no longer matches the chain; rebuilding it.");
+            let start = fresh(client, tab).await?;
+            extend(client, start)
                 .await
-                .map_err(|_| Failure::unavailable())?,
-        )
-        .map_err(|_| Failure::unavailable())?;
+                .map_err(|_| Failure::unavailable())?
+        }
+        Err(_) => return Err(Failure::unavailable()),
+    };
     let snapshot = serde_json::to_vec(&state.snapshot().map_err(|_| Failure::internal())?)
         .map_err(|_| Failure::internal())?;
     app.store

@@ -21,6 +21,7 @@ async function jsonReply(response: Response): Promise<unknown> {
 export async function getOffer(): Promise<Offer> {
   return await jsonReply(await fetch("/v1/offer", {credentials: "omit", cache: "no-store", redirect: "error"})) as Offer;
 }
+const diverged = new Error("The saved chain view no longer matches the chain.");
 export async function relay(method: string, body: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch("/v1/lwd", {method: "POST", credentials: "omit", cache: "no-store", redirect: "error", headers: {"content-type": "application/grpc-web+proto", "x-tidvar-method": method}, body: body.slice().buffer, signal: AbortSignal.timeout(45000)});
   if (!response.ok || !response.headers.get("content-type")?.includes("application/grpc-web")) throw new Error("We can't reach the Zcash server right now. Keep this page open and retry.");
@@ -107,13 +108,29 @@ export class Opening {
       height = start;
     }
     const tip = wasm.latest_height(await relay("GetLatestBlock", wasm.latest_request()));
-    while (height < tip) {
-      const end = height + 128n < tip ? height + 128n : tip;
-      payer.apply_blocks(await relay("GetBlockRange", wasm.range_request(height + 1n, end)));
-      height = payer.synced_height();
+    // Network failures are thrown as they are; a view that no longer links to the chain
+    // (a block it holds was replaced in a reorg) is rebuilt once from the tab's opening block.
+    const extend = async (from: bigint): Promise<bigint> => {
+      let at = from;
+      while (at < tip) {
+        const end = at + 128n < tip ? at + 128n : tip;
+        const blocks = await relay("GetBlockRange", wasm.range_request(at + 1n, end));
+        try {payer.apply_blocks(blocks);} catch {throw diverged;}
+        at = payer.synced_height();
+      }
+      const tree = await relay("GetTreeState", wasm.tree_request(at));
+      let value: bigint;
+      try {value = BigInt(payer.verify_tip(tree));} catch {throw diverged;}
+      progress(at, value);
+      return value;
+    };
+    try {return await extend(height);}
+    catch (failure) {
+      if (failure !== diverged) throw failure;
+      const start = BigInt(record.body.terms.open_height) - 1n;
+      payer.rebuild_sync(await relay("GetTreeState", wasm.tree_request(start)));
+      try {return await extend(start);}
+      catch (again) {throw again === diverged ? new Error("The Zcash server's chain does not match this tab yet. Retrying.") : again;}
     }
-    const value = payer.verify_tip(await relay("GetTreeState", wasm.tree_request(height)));
-    progress(height, value);
-    return value;
   }
 }

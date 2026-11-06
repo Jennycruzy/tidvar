@@ -191,6 +191,13 @@ impl BrowserPayer {
         let tree = tidvar_chain::transport::unary(reply).map_err(error)?;
         payer.start_sync(tree).map_err(error)
     }
+    pub fn rebuild_sync(&mut self, reply: &[u8]) -> Result<(), JsValue> {
+        let State::Ready(payer) = &mut self.state else {
+            return Err(wrong_state());
+        };
+        let tree = tidvar_chain::transport::unary(reply).map_err(error)?;
+        payer.rebuild_sync(tree).map_err(error)
+    }
     pub fn apply_blocks(&mut self, reply: &[u8]) -> Result<(), JsValue> {
         let State::Ready(payer) = &mut self.state else {
             return Err(wrong_state());
@@ -310,7 +317,7 @@ pub fn observe_info(reply: &[u8]) -> Result<String, JsValue> {
             ));
         }
     };
-    tidvar_core::record::observe_branch(network, &info.consensus_branch_id, info.block_height);
+    let _ = network;
     Ok(info.consensus_branch_id)
 }
 #[wasm_bindgen]

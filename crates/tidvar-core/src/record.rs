@@ -8,33 +8,14 @@ use pasta_curves::pallas::Point;
 use rand_core::{CryptoRng, RngCore};
 use reddsa::{Signature, SigningKey, VerificationKey, orchard::SpendAuth};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 use zcash_address::unified::{self, Container, Encoding};
 use zcash_protocol::consensus::{self, BlockHeight, BranchId, NetworkType, NetworkUpgrade};
 
-/// The lowest mainnet height a Zcash server has reported running NU7 (0: not seen yet).
-/// NU7's mainnet height was not scheduled in the pinned library; this lets every tab
-/// switch to NU7 transactions as soon as the chain does, without a code change.
-static MAINNET_NU7: AtomicU32 = AtomicU32::new(0);
+/// NU7 activated on mainnet at this height. The pinned library does not schedule it yet.
+pub const MAINNET_NU7_HEIGHT: u32 = 3_543_405;
 
-/// Records that a Zcash server reported this network's tip at `height` on `branch`.
-pub fn observe_branch(network: Network, branch: &str, height: u64) {
-    if network != Network::Mainnet || branch != "77190ad9" {
-        return;
-    }
-    let Ok(height) = u32::try_from(height) else {
-        return;
-    };
-    let mut seen = MAINNET_NU7.load(Ordering::Relaxed);
-    while seen == 0 || height < seen {
-        match MAINNET_NU7.compare_exchange(seen, height, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => break,
-            Err(actual) => seen = actual,
-        }
-    }
-}
-/// Consensus parameters for a tab: the library's, plus mainnet NU7 once observed.
+/// Consensus parameters for a tab: the library's, plus mainnet NU7.
 #[derive(Clone, Copy, Debug)]
 pub struct Consensus(Network);
 impl consensus::Parameters for Consensus {
@@ -43,10 +24,9 @@ impl consensus::Parameters for Consensus {
     }
     fn activation_height(&self, upgrade: NetworkUpgrade) -> Option<BlockHeight> {
         match (self.0, upgrade) {
-            (Network::Mainnet, NetworkUpgrade::Nu7) => match MAINNET_NU7.load(Ordering::Relaxed) {
-                0 => None,
-                height => Some(BlockHeight::from_u32(height)),
-            },
+            (Network::Mainnet, NetworkUpgrade::Nu7) => {
+                Some(BlockHeight::from_u32(MAINNET_NU7_HEIGHT))
+            }
             (Network::Mainnet, upgrade) => consensus::MAIN_NETWORK.activation_height(upgrade),
             (Network::Testnet, upgrade) => consensus::TEST_NETWORK.activation_height(upgrade),
         }
@@ -453,7 +433,7 @@ mod network_tests {
 
     #[test]
     fn each_network_signs_for_its_own_ironwood_branch() {
-        // Mainnet: Ironwood from NU6.3 (block 3,428,143); NU7 not yet scheduled.
+        // Mainnet: Ironwood from NU6.3 (block 3,428,143), NU7 from block 3,543,405.
         assert_eq!(Network::Mainnet.ironwood_branch(3_428_142), None);
         assert_eq!(
             Network::Mainnet.ironwood_branch(3_428_143),
@@ -461,7 +441,7 @@ mod network_tests {
         );
         assert_eq!(
             Network::Mainnet.ironwood_branch(3_600_000),
-            Some(BranchId::Nu6_3)
+            Some(BranchId::Nu7)
         );
         // Testnet already runs NU7 (block 4,465,026).
         assert_eq!(
@@ -480,27 +460,13 @@ mod network_tests {
     }
 
     #[test]
-    fn mainnet_switches_to_nu7_when_a_server_reports_it() {
-        // Testnet branch ids are ignored for mainnet, and NU6.3 reports change nothing.
-        observe_branch(Network::Testnet, "77190ad9", 3_900_000);
-        observe_branch(Network::Mainnet, "37a5165b", 3_900_000);
+    fn mainnet_uses_nu7_from_its_activation_height() {
         assert_eq!(
-            Network::Mainnet.ironwood_branch(3_900_001),
+            Network::Mainnet.ironwood_branch(MAINNET_NU7_HEIGHT - 1),
             Some(BranchId::Nu6_3)
         );
-        observe_branch(Network::Mainnet, "77190ad9", 3_900_000);
         assert_eq!(
-            Network::Mainnet.ironwood_branch(3_900_001),
-            Some(BranchId::Nu7)
-        );
-        assert_eq!(
-            Network::Mainnet.ironwood_branch(3_899_999),
-            Some(BranchId::Nu6_3)
-        );
-        // A later report never moves the activation forward.
-        observe_branch(Network::Mainnet, "77190ad9", 3_950_000);
-        assert_eq!(
-            Network::Mainnet.ironwood_branch(3_900_001),
+            Network::Mainnet.ironwood_branch(MAINNET_NU7_HEIGHT),
             Some(BranchId::Nu7)
         );
     }

@@ -1,5 +1,6 @@
 use crate::{App, Failure, close::publish, payments};
 use rand_core::OsRng;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tidvar_chain::sync::SyncState;
 use tidvar_core::{
@@ -142,9 +143,33 @@ pub async fn pack(app: &App, tab_id: [u8; 32]) -> Result<String, Failure> {
     std::fs::rename(&temporary, queue.join(&name)).map_err(|_| Failure::internal())?;
     Ok(txid)
 }
+/// Spaces out retries for a tab whose step keeps failing: 2, 4, 8 ... minutes, at most an hour.
+#[derive(Default)]
+struct Retries(HashMap<[u8; 32], (u64, u32)>);
+impl Retries {
+    fn waiting(&self, tab: &[u8; 32], now_ms: u64) -> bool {
+        self.0
+            .get(tab)
+            .is_some_and(|(next_ms, _)| now_ms < *next_ms)
+    }
+    fn failed(&mut self, tab: [u8; 32], now_ms: u64) -> u64 {
+        let entry = self.0.entry(tab).or_insert((0, 0));
+        entry.1 = entry.1.saturating_add(1);
+        let minutes = (1u64 << entry.1.min(6)).min(60);
+        entry.0 = now_ms.saturating_add(minutes * 60_000);
+        minutes
+    }
+    fn done(&mut self, tab: &[u8; 32]) {
+        self.0.remove(tab);
+    }
+}
 /// Once a minute, closes every tab that reached its closing deadline, so the service is paid
 /// before the payer's refund time even if the payer never returns.
 pub async fn watch_deadlines(app: App) {
+    let mut pack_retries = Retries::default();
+    let mut close_retries = Retries::default();
+    // Tabs whose funding is already spent on chain (a watchtower close was mined): nothing to do.
+    let mut settled: HashSet<[u8; 32]> = HashSet::new();
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
         // Keeps the network upgrade in force current for IOU checks (mainnet NU7).
@@ -157,10 +182,23 @@ pub async fn watch_deadlines(app: App) {
                 .packing_due(now)
                 .map_err(failure)
         });
+        let clock = now().unwrap_or(0);
         for tab in packing.unwrap_or_default() {
+            if pack_retries.waiting(&tab, clock) {
+                continue;
+            }
             match pack(&app, tab).await {
-                Ok(_) => eprintln!("Watchtower packed a finished close."),
-                Err(error) => eprintln!("Watchtower pack not finished: {}", error.1),
+                Ok(_) => {
+                    pack_retries.done(&tab);
+                    eprintln!("Watchtower packed a finished close.")
+                }
+                Err(error) => {
+                    let minutes = pack_retries.failed(tab, clock);
+                    eprintln!(
+                        "Watchtower pack not finished: {} Next try in {minutes} min.",
+                        error.1
+                    )
+                }
             }
         }
         // A watchtower close that reached the chain ends the tab: no more payments or VPN.
@@ -201,12 +239,47 @@ pub async fn watch_deadlines(app: App) {
             Err(_) => continue,
         };
         for tab in due {
+            if settled.contains(&tab) || close_retries.waiting(&tab, clock) {
+                continue;
+            }
             match force_close(&app, tab).await {
                 Ok(reply) => {
+                    close_retries.done(&tab);
                     eprintln!("Forced close: {}", reply["step"].as_str().unwrap_or("done"))
                 }
-                Err(error) => eprintln!("Forced close not finished: {}", error.1),
+                Err(error) if error.0 == axum::http::StatusCode::GONE => {
+                    settled.insert(tab);
+                    eprintln!(
+                        "A tab past its deadline is already settled on chain; no forced close needed."
+                    )
+                }
+                Err(error) => {
+                    let minutes = close_retries.failed(tab, clock);
+                    eprintln!(
+                        "Forced close not finished: {} Next try in {minutes} min.",
+                        error.1
+                    )
+                }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Retries;
+
+    #[test]
+    fn retries_back_off_to_an_hour_and_reset_on_success() {
+        let mut retries = Retries::default();
+        let tab = [7u8; 32];
+        assert!(!retries.waiting(&tab, 0));
+        let waits: Vec<u64> = (0..8).map(|_| retries.failed(tab, 0)).collect();
+        assert_eq!(waits, [2, 4, 8, 16, 32, 60, 60, 60]);
+        assert!(retries.waiting(&tab, 59 * 60_000));
+        assert!(!retries.waiting(&tab, 60 * 60_000));
+        retries.done(&tab);
+        assert!(!retries.waiting(&tab, 0));
+        assert_eq!(retries.failed(tab, 0), 2);
     }
 }

@@ -487,6 +487,15 @@ impl Payer {
         self.sync = Some(SyncState::new(&self.keys.public.viewing_key, before)?);
         Ok(())
     }
+    /// Starts the funding view again from `before`, replacing one whose blocks were replaced
+    /// by a reorg. Everything it holds is read again from the chain.
+    pub fn rebuild_sync(
+        &mut self,
+        before: tidvar_chain::service::TreeState,
+    ) -> Result<(), PayerError> {
+        self.sync = Some(SyncState::new(&self.keys.public.viewing_key, before)?);
+        Ok(())
+    }
     pub fn consume_commitment(&mut self, bytes: &[u8]) -> Result<(), PayerError> {
         let parsed = reddsa::frost::redpallas::round1::SigningCommitments::deserialize(bytes)
             .map_err(|_| PayerError::Backup)?;
